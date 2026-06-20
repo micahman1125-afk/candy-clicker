@@ -95,11 +95,15 @@ fun CandyClickerApp(viewModel: GameViewModel) {
     var scaleTarget by remember { mutableStateOf(1.0f) }
     var activeTab by rememberSaveable { mutableStateOf("game") }
     var shopSubcategory by rememberSaveable { mutableStateOf("buildings") }
+    var buyQuantity by rememberSaveable { mutableStateOf(1) }
+    var isSellMode by rememberSaveable { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    var showAchievements by rememberSaveable { mutableStateOf(false) }
+    var selectedAchievement by remember { mutableStateOf<CandyAchievementItem?>(null) }
 
     // Physical tap-spring animation for squash on click
     val scale by animateFloatAsState(
-        targetValue = scaleTarget,
+        targetValue = if (state.lollipopMovementOn) scaleTarget else 1.0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -128,10 +132,10 @@ fun CandyClickerApp(viewModel: GameViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp)
                     .background(Color(0xCCFEDADF))
                     .border(1.dp, Color(0xFFF4DDDE))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -256,38 +260,40 @@ fun CandyClickerApp(viewModel: GameViewModel) {
         Column(
             modifier = Modifier
                 .weight(1.0f)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = if (activeTab == "game") 16.dp else 0.dp),
+            verticalArrangement = Arrangement.spacedBy(if (activeTab == "game") 12.dp else 0.dp)
         ) {
             // Card 1: Centered Total Candies and CPS Count (Background Removed)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "TOTAL CANDIES",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    color = Color(0xFF917576)
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = viewModel.formatValue(state.candies),
-                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp),
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFF2B1516)
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${viewModel.formatValue(viewModel.getCps(state))} /s",
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFFF547D)
-                )
+            if (activeTab == "game") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "TOTAL CANDIES",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        color = Color(0xFF917576)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = viewModel.formatValue(state.candies),
+                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp),
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF2B1516)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${viewModel.formatValue(viewModel.getCps(state))} /s",
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFF547D)
+                    )
+                }
             }
 
             if (activeTab == "game") {
@@ -307,13 +313,13 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(285.dp)
+                            modifier = Modifier.size(642.dp)
                         ) {
                             Image(
                                 bitmap = lollipopBitmap,
                                 contentDescription = "Giant Candy click target",
                                 modifier = Modifier
-                                    .size(210.dp)
+                                    .size(472.dp)
                                     .scale(scale)
                                     .rotate(-45f)
                                     .testTag("candy_click_target")
@@ -321,193 +327,495 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
-                                        coroutineScope.launch {
-                                            scaleTarget = 0.82f
-                                            delay(70)
-                                            scaleTarget = 1.0f
+                                        if (state.lollipopMovementOn) {
+                                            coroutineScope.launch {
+                                                scaleTarget = 0.82f
+                                                delay(70)
+                                                scaleTarget = 1.0f
+                                            }
                                         }
-                                        CrunchSoundPlayer.play()
-                                        val randomX = (130..190).random().toFloat()
-                                        val randomY = (130..190).random().toFloat()
+                                        if (state.soundOn) {
+                                            CrunchSoundPlayer.play()
+                                        }
+                                        
+                                        // Random polar coordinates to distribute the indicators in a ring around the lollipop
+                                        val angle = (0..359).random() * (Math.PI / 180.0)
+                                        val radius = (195..285).random()
+                                        val randomX = (kotlin.math.cos(angle) * radius).toFloat()
+                                        val randomY = (kotlin.math.sin(angle) * radius).toFloat()
+                                        
                                         viewModel.onCandyClicked(randomX, randomY)
                                     },
                                 contentScale = ContentScale.Fit
                             )
-                        }
-                    }
 
-                    // Floating scores
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        floatingEffects.forEach { effect ->
-                            FloatingScoreText(effect = effect)
+                            // Render floating indicators overlays right around the lollipop
+                            floatingEffects.forEach { effect ->
+                                FloatingScoreText(effect = effect)
+                            }
                         }
                     }
                 }
             } else if (activeTab == "secret_sugars") {
-                // --- SECRET SUGARS TAB ---
+                // --- SECRET SUGARS TAB (Full Screen) ---
                 Box(
                     modifier = Modifier
                         .weight(1.0f)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xDF2B1516)) // Custom classy semi-transparent deep burgundy
-                        .padding(18.dp)
+                        .background(Color(0xFF230F10)) // Solid deep burgundy background covering full screen
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // Title
-                        Text(
-                            text = "Secret Sugars 🤫",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-
-                        Text(
-                            text = "Unlock high-tier click scaling and ascend to new cookie dimensions here.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFF9BCBC),
-                            fontSize = 12.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Column 1: Click Boost Display
-                        Row(
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Secret Sugars Status Header
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(Color(0xFF1D0E0F))
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .background(Color(0xFF1D0E0F)) // Darker warm chocolate header accent
+                                .padding(horizontal = 18.dp, vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column {
-                                Text(
-                                    text = "TAP POWER / CLICK BOOST",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFF9BCBC)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "+${viewModel.formatValue(viewModel.getClickPower(state))}",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "Each tap yields this extra sweet boost",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF917576),
-                                    fontSize = 11.sp
-                                )
-                            }
-                            Text(text = "⚡", fontSize = 28.sp)
+                            Text(
+                                text = "TOTAL CANDIES",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 2.sp,
+                                color = Color(0xFFF9BCBC)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = viewModel.formatValue(state.candies),
+                                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "${viewModel.formatValue(viewModel.getCps(state))} /s",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFF547D)
+                            )
                         }
 
-                        // Column 2: Prestige Progress
-                        val prestigeGoal = 1_000_000_000_000.0
-                        val canPrestige = state.candies >= prestigeGoal
-                        val progressRatio = (state.candies / prestigeGoal).coerceIn(0.0, 1.0).toFloat()
-
-                        Box(
+                        // Scrollable/Control Area with inner padding for the cards
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(if (canPrestige) Color(0xFFFF547D) else Color(0xFF1D0E0F))
-                                .border(1.dp, Color(0xFFF9BCBC).copy(alpha = 0.2f), RoundedCornerShape(18.dp))
-                                .clickable(enabled = canPrestige) {
-                                    viewModel.prestige()
-                                }
-                                .padding(16.dp),
-                            contentAlignment = Alignment.CenterStart
+                                .fillMaxSize()
+                                .padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                            // Title
+                            Text(
+                                text = "Secret Sugars 🤫",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+
+                            Text(
+                                text = "Unlock high-tier click scaling and ascend to new cookie dimensions here.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFF9BCBC),
+                                fontSize = 12.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Column 1: Click Boost Display
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(Color(0xFF1D0E0F))
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
                                     Text(
-                                        text = if (canPrestige) "READY TO PRESTIGE! ⭐" else "PRESTIGE PROGRESS ⏳",
+                                        text = "CLICK BOOST",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (canPrestige) Color.White else Color(0xFFF9BCBC)
+                                        color = Color(0xFFF9BCBC)
                                     )
-                                    if (state.prestigePoints > 0) {
-                                        Text(
-                                            text = "⭐ x${state.prestigePoints}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Black,
-                                            color = Color.White
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                if (canPrestige) {
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "TAP HERE TO CLAIM +1 PT!",
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        text = "+${state.prestigePoints}%",
+                                        style = MaterialTheme.typography.titleLarge,
                                         fontWeight = FontWeight.Black,
                                         color = Color.White
                                     )
                                     Text(
-                                        text = "Your sweets will reset, but you will unlock permanent passive multiplier bonuses per star!",
+                                        text = "Prestige click power multiplier bonus",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.8f),
+                                        color = Color(0xFF917576),
                                         fontSize = 11.sp
                                     )
-                                } else {
-                                    LinearProgressIndicator(
-                                        progress = { progressRatio },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(8.dp)
-                                            .clip(RoundedCornerShape(4.dp)),
-                                        color = Color(0xFFFF547D),
-                                        trackColor = Color(0xFF2B1516)
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
+                                Text(text = "⭐", fontSize = 28.sp)
+                            }
+
+                            // Column 2: Prestige Progress
+                            val prestigeGoal = 1_000_000_000_000.0
+                            val canPrestige = state.candies >= prestigeGoal
+                            val progressRatio = (state.candies / prestigeGoal).coerceIn(0.0, 1.0).toFloat()
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(if (canPrestige) Color(0xFFFF547D) else Color(0xFF1D0E0F))
+                                    .border(1.dp, Color(0xFFF9BCBC).copy(alpha = 0.2f), RoundedCornerShape(18.dp))
+                                    .clickable(enabled = canPrestige) {
+                                        viewModel.prestige()
+                                    }
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "${viewModel.formatValue(state.candies)} / 1.00 T",
-                                            fontSize = 11.sp,
+                                            text = if (canPrestige) "READY TO PRESTIGE! ⭐" else "PRESTIGE PROGRESS ⏳",
+                                            style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFFF9BCBC)
+                                            color = if (canPrestige) Color.White else Color(0xFFF9BCBC)
+                                        )
+                                        if (state.prestigePoints > 0) {
+                                            Text(
+                                                text = "⭐ x${state.prestigePoints}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Black,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    if (canPrestige) {
+                                        val pointsToClaim = (state.candies / prestigeGoal).toLong()
+                                        Text(
+                                            text = "TAP HERE TO CLAIM +$pointsToClaim ${if (pointsToClaim == 1L) "PT" else "PTS"}!",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Black,
+                                            color = Color.White
                                         )
                                         Text(
-                                            text = "${(progressRatio * 100).toInt()}% Done",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFFFF547D)
+                                            text = "Your sweets will reset, but you will unlock permanent passive multiplier bonuses per star!",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            fontSize = 11.sp
                                         )
+                                    } else {
+                                        LinearProgressIndicator(
+                                            progress = { progressRatio },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(8.dp)
+                                                .clip(RoundedCornerShape(4.dp)),
+                                            color = Color(0xFFFF547D),
+                                            trackColor = Color(0xFF2B1516)
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "${viewModel.formatValue(state.candies)} / 1.00 T",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFF9BCBC)
+                                            )
+                                            Text(
+                                                text = "${(progressRatio * 100).toInt()}% Done",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFFF547D)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Achievements Button Card
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .border(1.dp, Color(0xFFFFD54F).copy(alpha = 0.3f), RoundedCornerShape(18.dp))
+                                    .clickable {
+                                        showAchievements = true
+                                    },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF1D0E0F)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF2B1516)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = "🏆", fontSize = 24.sp)
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Candy Store Achievements",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "Check display shelves for unlocked upgrade jars!",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFF917576)
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForward,
+                                        contentDescription = "Open Achievements",
+                                        tint = Color(0xFFFFD54F)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+
+                    // --- CANDY SHELF ACHIEVEMENTS OVERLAY (Animated Slide-up) ---
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showAchievements,
+                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF230F10)) // matching deep burgundy background
+                        ) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // Overlay Header with backward navigation
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFF1D0E0F))
+                                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = { showAchievements = false }) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowBack,
+                                            contentDescription = "Back",
+                                            tint = Color.White
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "Candy Store Shelves 🏪",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "Milestones achieved by upgrading store properties",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFFF9BCBC),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+
+                                // Scrollable shelf rows representation
+                                val achievements = remember(state) { getAchievementsList(state) }
+                                
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    // Let's group achievements by category and make a shelf for each category!
+                                    val categories = listOf(
+                                        "Sugar Towers" to "🗼",
+                                        "Candy Drones" to "🐝",
+                                        "Gingerbread Mills" to "🍪",
+                                        "Cotton Clouds" to "☁️",
+                                        "Chocolate Volcanoes" to "🌋",
+                                        "Sugar Earths" to "🌍",
+                                        "Lollipop Galaxies" to "🌌",
+                                        "Catalyst Tools" to "🧪"
+                                    )
+
+                                    items(categories) { (cat, icon) ->
+                                        val catAchievements = achievements.filter { it.category == cat }
+                                        CandyStoreShelf(
+                                            shelfName = cat,
+                                            shelfIcon = icon,
+                                            achievements = catAchievements,
+                                            onAchievementSelected = { selectedAchievement = it }
+                                        )
+                                    }
+                                    
+                                    item {
+                                        Spacer(modifier = Modifier.height(24.dp))
+                                    }
+                                }
+                            }
+                            
+                            // Bottom popup detail card for the clicked achievement
+                            selectedAchievement?.let { achievement ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                        .clickable { selectedAchievement = null },
+                                    contentAlignment = Alignment.BottomCenter
+                                ) {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = false) {} // block internal click
+                                            .padding(16.dp)
+                                            .border(1.dp, Color(0xFFFFD54F).copy(alpha = 0.4f), RoundedCornerShape(24.dp)),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = Color(0xFF1D0E0F)
+                                        ),
+                                        shape = RoundedCornerShape(24.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .padding(20.dp)
+                                                .fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = achievement.tier.uppercase(),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 1.sp,
+                                                    color = getTierColor(achievement.tier)
+                                                )
+                                                
+                                                val isCompleted = achievement.currentLevel >= achievement.targetLevel
+                                                Text(
+                                                    text = if (isCompleted) "🏆 COMPLETED" else "🔒 LOCKED",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Black,
+                                                    color = if (isCompleted) Color(0xFF4CAF50) else Color(0xFFFF547D)
+                                                )
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            
+                                            // Big Icon Jar
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(80.dp)
+                                                    .clip(RoundedCornerShape(20.dp))
+                                                    .background(Color(0xFF2B1516))
+                                                    .padding(12.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(text = achievement.emoji, fontSize = 42.sp)
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            
+                                            Text(
+                                                text = achievement.name,
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.Black,
+                                                color = Color.White,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            
+                                            Text(
+                                                text = achievement.description,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = Color(0xFFFFDADB),
+                                                textAlign = TextAlign.Center
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            
+                                            // Progress Indicator
+                                            val progressRatio = (achievement.currentLevel.toFloat() / achievement.targetLevel.toFloat()).coerceIn(0f, 1f)
+                                            LinearProgressIndicator(
+                                                progress = { progressRatio },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(8.dp)
+                                                    .clip(RoundedCornerShape(4.dp)),
+                                                color = Color(0xFFFF547D),
+                                                trackColor = Color(0xFF2B1516)
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            
+                                            Text(
+                                                text = "Progress: ${achievement.currentLevel} / ${achievement.targetLevel}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFF9BCBC)
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            
+                                            Button(
+                                                onClick = { selectedAchievement = null },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = Color(0xFFFF547D)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Text("Close details", fontWeight = FontWeight.Bold, color = Color.White)
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-
-                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             } else if (activeTab == "buildings") {
-                // --- CANDY STORE TAB ---
+                // --- CANDY STORE TAB (Full Screen) ---
                 Box(
                     modifier = Modifier
                         .weight(1.0f)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xDF2B1516)) // Custom classy semi-transparent deep burgundy
-                        .padding(18.dp)
+                        .background(Color(0xFF230F10)) // Solid deep burgundy background covering full screen
                 ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // Shop Header
+                    // Scrollable/Control Area with inner padding for the cards
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(18.dp)
+                    ) {
+                            // Shop Header
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -520,22 +828,68 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                 color = Color.White
                             )
 
-                            val categoryFilteredItems = viewModel.getUpgradeItems(state).filter {
-                                if (shopSubcategory == "upgrades") !it.isBuilding else it.isBuilding
-                            }
-                            val availableCount = categoryFilteredItems.count { state.candies >= it.cost }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFFF547D))
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "$availableCount BUYABLE",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White
-                                )
+                            if (shopSubcategory == "buildings") {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // BUY/SELL Toggle Button
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSellMode) Color(0xFFC62828) else Color(0xFF2E7D32))
+                                            .clickable { isSellMode = !isSellMode }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (isSellMode) "SELL" else "BUY",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Black,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    // Single Quantity Selector Button
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFFF547D))
+                                            .clickable {
+                                                val quantities = listOf(1, 10, 25, 50, 100)
+                                                val currentIndex = quantities.indexOf(buyQuantity)
+                                                val nextIndex = (currentIndex + 1) % quantities.size
+                                                buyQuantity = quantities[nextIndex]
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "x$buyQuantity",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            } else {
+                                val categoryFilteredItems = viewModel.getUpgradeItems(state).filter {
+                                    if (shopSubcategory == "upgrades") !it.isBuilding else it.isBuilding
+                                }
+                                val availableCount = categoryFilteredItems.count { state.candies >= it.cost }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFFFF547D))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "$availableCount BUYABLE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
 
@@ -592,10 +946,31 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                         // Embedded upgrades list in the Bento box
                         val upgrades = viewModel.getUpgradeItems(state).filter {
                             if (shopSubcategory == "upgrades") !it.isBuilding else it.isBuilding
+                        }.map { item ->
+                            if (item.isBuilding) {
+                                if (isSellMode) {
+                                    val actualCount = minOf(buyQuantity, item.level)
+                                    val refund = if (actualCount > 0) {
+                                        viewModel.calculateMultiCost(item.baseCost, item.level - actualCount, actualCount, item.costMultiplier) * 0.5
+                                    } else {
+                                        0.0
+                                    }
+                                    item.copy(cost = refund)
+                                } else {
+                                    if (buyQuantity > 1) {
+                                        val multiCost = viewModel.calculateMultiCost(item.baseCost, item.level, buyQuantity, item.costMultiplier)
+                                        item.copy(cost = multiCost)
+                                    } else {
+                                        item
+                                    }
+                                }
+                            } else {
+                                item
+                            }
                         }
                         LazyColumn(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
                                 .weight(1.0f)
                                 .testTag("upgrades_list"),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -605,154 +980,200 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                 BentoStoreCard(
                                     item = item,
                                     currentCandies = state.candies,
-                                    onBuy = { viewModel.buyUpgrade(item.id) },
-                                    viewModel = viewModel
+                                    onBuy = { viewModel.buyUpgrade(item.id, if (item.isBuilding) buyQuantity else 1) },
+                                    viewModel = viewModel,
+                                    buyQuantity = if (item.isBuilding) buyQuantity else 1,
+                                    isSellMode = isSellMode && item.isBuilding,
+                                    onSell = { viewModel.sellUpgrade(item.id, if (item.isBuilding) buyQuantity else 1) }
                                 )
                             }
                         }
                     }
                 }
             } else if (activeTab == "settings") {
-                // --- SETTINGS TAB ---
+                // --- SETTINGS TAB (Full Screen) ---
                 Box(
                     modifier = Modifier
                         .weight(1.0f)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xDF2B1516)) // Custom classy semi-transparent deep burgundy
-                        .padding(18.dp)
+                        .background(Color(0xFF230F10)) // Solid deep burgundy background covering full screen
                 ) {
+                    // Scrollable/Control Area with inner padding for the settings rows
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Title
-                        Text(
-                            text = "Sugar Settings",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                            // Title
+                            Text(
+                                text = "Sugar Settings",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
 
-                        // Sound Option Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF1D0E0F))
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                            // Sound Option Row
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF1D0E0F))
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(text = "🔊", fontSize = 20.sp)
-                                Column {
-                                    Text(
-                                        text = "Sound Effects",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(text = "🔊", fontSize = 20.sp)
+                                    Column {
+                                        Text(
+                                            text = "Sound Effects",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = if (state.soundOn) "Crunchy clicks enabled" else "Muted",
+                                            color = Color(0xFFF9BCBC),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = state.soundOn,
+                                    onCheckedChange = { viewModel.toggleSound() },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = Color(0xFFFF547D),
+                                        uncheckedThumbColor = Color(0xFF564344),
+                                        uncheckedTrackColor = Color(0xFFF4DDDE)
+                                    )
+                                )
+                            }
+
+                            // Vibration Option Row
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF1D0E0F))
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(text = "📳", fontSize = 20.sp)
+                                    Column {
+                                        Text(
+                                            text = "Haptic Feedback",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = if (state.vibrationOn) "Sweet vibrations active" else "Silent taps",
+                                            color = Color(0xFFF9BCBC),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = state.vibrationOn,
+                                    onCheckedChange = { viewModel.toggleVibration() },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = Color(0xFFFF547D),
+                                        uncheckedThumbColor = Color(0xFF564344),
+                                        uncheckedTrackColor = Color(0xFFF4DDDE)
+                                    )
+                                )
+                            }
+
+                            // Lollipop Movement Option Row
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF1D0E0F))
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(text = "🍭", fontSize = 20.sp)
+                                    Column {
+                                        Text(
+                                            text = "Lollipop Movement",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = if (state.lollipopMovementOn) "Bounce animation active" else "Static mode",
+                                            color = Color(0xFFF9BCBC),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = state.lollipopMovementOn,
+                                    onCheckedChange = { viewModel.toggleLollipopMovement() },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = Color(0xFFFF547D),
+                                        uncheckedThumbColor = Color(0xFF564344),
+                                        uncheckedTrackColor = Color(0xFFF4DDDE)
+                                    ),
+                                    modifier = Modifier.testTag("lollipop_movement_toggle")
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            // Reset progress Button
+                            Button(
+                                onClick = { showResetDialog = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFF547D)
+                                )
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                     Text(
-                                        text = if (state.soundOn) "Crunchy clicks enabled" else "Muted",
-                                        color = Color(0xFFF9BCBC),
-                                        fontSize = 11.sp
+                                        text = "Reset Game Progress",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
-                            }
-                            Switch(
-                                checked = state.soundOn,
-                                onCheckedChange = { viewModel.toggleSound() },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = Color(0xFFFF547D),
-                                    uncheckedThumbColor = Color(0xFF564344),
-                                    uncheckedTrackColor = Color(0xFFF4DDDE)
-                                )
-                            )
-                        }
-
-                        // Vibration Option Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF1D0E0F))
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Text(text = "📳", fontSize = 20.sp)
-                                Column {
-                                    Text(
-                                        text = "Haptic Feedback",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        text = if (state.vibrationOn) "Sweet vibrations active" else "Silent taps",
-                                        color = Color(0xFFF9BCBC),
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = state.vibrationOn,
-                                onCheckedChange = { viewModel.toggleVibration() },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = Color(0xFFFF547D),
-                                    uncheckedThumbColor = Color(0xFF564344),
-                                    uncheckedTrackColor = Color(0xFFF4DDDE)
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        // Reset progress Button
-                        Button(
-                            onClick = { showResetDialog = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFFF547D)
-                            )
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = "Reset Game Progress",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
                             }
                         }
                     }
                 }
             }
         }
-    }
     }
 
     // Offline progress dialog
@@ -801,25 +1222,31 @@ fun FloatingScoreText(effect: FloatingEffect) {
     LaunchedEffect(effect.id) {
         launch {
             yAnim.animateTo(
-                targetValue = -120f,
-                animationSpec = tween(durationMillis = 600, easing = LinearOutSlowInEasing)
+                targetValue = -70f,
+                animationSpec = tween(durationMillis = 750, easing = LinearOutSlowInEasing)
             )
         }
         launch {
             alphaAnim.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(durationMillis = 600, easing = LinearOutSlowInEasing)
+                animationSpec = tween(durationMillis = 750, easing = LinearOutSlowInEasing)
             )
         }
     }
 
     Text(
         text = effect.text,
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.headlineLarge.copy(
+            shadow = androidx.compose.ui.graphics.Shadow(
+                color = Color.Black.copy(alpha = 0.6f),
+                offset = Offset(3f, 3f),
+                blurRadius = 6f
+            )
+        ),
         fontWeight = FontWeight.Black,
-        color = Color(0xFFFF547D), // neon raspberry pink pop
+        color = Color(0xFF42000A), // Extremely deep, dark rich chocolate-burgundy for absolute contrast on bright backgrounds
         modifier = Modifier
-            .offset { IntOffset((effect.offsetX.toInt() / 2) - 15, (effect.offsetY.toInt() / 2) + yAnim.value.toInt() - 10) }
+            .offset { IntOffset(effect.offsetX.toInt(), effect.offsetY.toInt() + yAnim.value.toInt()) }
             .alpha(alphaAnim.value)
     )
 }
@@ -830,9 +1257,13 @@ fun BentoStoreCard(
     item: UpgradeItem,
     currentCandies: Double,
     onBuy: () -> Unit,
-    viewModel: GameViewModel
+    viewModel: GameViewModel,
+    buyQuantity: Int = 1,
+    isSellMode: Boolean = false,
+    onSell: () -> Unit = {}
 ) {
-    val canAfford = currentCandies >= item.cost
+    val actualSellCount = if (isSellMode && item.isBuilding) minOf(buyQuantity, item.level) else 0
+    val canAct = if (isSellMode) actualSellCount > 0 else currentCandies >= item.cost
     val icon = when {
         item.id == "click" -> "🗼"
         item.id.startsWith("click_") -> "🗼✨"
@@ -854,13 +1285,15 @@ fun BentoStoreCard(
         else -> "🌌"
     }
 
+    val actionColor = if (isSellMode) Color(0xFFE53935) else Color(0xFFFF547D)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0x1AFFFFFF)) // White 10%
             .border(1.dp, Color(0x10FFFFFF), RoundedCornerShape(16.dp))
-            .clickable(enabled = canAfford, onClick = onBuy)
+            .clickable(enabled = canAct, onClick = if (isSellMode) onSell else onBuy)
             .padding(12.dp)
     ) {
         Row(
@@ -915,28 +1348,40 @@ fun BentoStoreCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Cost: ${viewModel.formatValue(item.cost)}",
+                        text = if (isSellMode) {
+                            "Refund: +${viewModel.formatValue(item.cost)}"
+                        } else {
+                            "Cost: ${viewModel.formatValue(item.cost)}"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (canAfford) Color(0xFFFFDADB) else Color(0x80FFFFFF)
+                        color = if (isSellMode) {
+                            if (canAct) Color(0xFF81C784) else Color(0x80FFFFFF)
+                        } else {
+                            if (canAct) Color(0xFFFFDADB) else Color(0x80FFFFFF)
+                        }
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Right Buy button/indication
+            // Right Buy/Sell button/indication
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (canAfford) Color(0xFFFF547D) else Color(0x15FFFFFF))
-                    .clickable(enabled = canAfford, onClick = onBuy)
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .background(if (canAct) actionColor else Color(0x15FFFFFF))
+                    .clickable(enabled = canAct, onClick = if (isSellMode) onSell else onBuy)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = "BUY",
+                    text = if (isSellMode) {
+                        if (actualSellCount > 1) "SELL x$actualSellCount" else "SELL"
+                    } else {
+                        if (item.isBuilding && buyQuantity > 1) "BUY x$buyQuantity" else "BUY"
+                    },
                     fontWeight = FontWeight.Black,
-                    color = if (canAfford) Color.White else Color(0x40FFFFFF),
+                    color = if (canAct) Color.White else Color(0x40FFFFFF),
                     fontSize = 11.sp
                 )
             }
@@ -1137,5 +1582,517 @@ object CrunchSoundPlayer {
                 e.printStackTrace()
             }
         }
+    }
+}
+
+// Achievements models and helper components
+data class CandyAchievementItem(
+    val id: String,
+    val name: String,
+    val category: String,
+    val upgradeId: String,
+    val targetLevel: Int,
+    val emoji: String,
+    val description: String,
+    val tier: String,
+    val currentLevel: Int
+)
+
+fun getTierColor(tier: String): Color {
+    return when(tier) {
+        "bronze" -> Color(0xFFCD7F32)   // Bronze
+        "silver" -> Color(0xFFC0C0C0)   // Silver
+        "gold" -> Color(0xFFFFD700)     // Gold
+        "diamond" -> Color(0xFF26C6DA)  // Diamond cyan
+        "platinum" -> Color(0xFFE5E4E2) // Platinum silver-white
+        "sapphire" -> Color(0xFF2196F3) // Sapphire blue
+        "emerald" -> Color(0xFF00E676)  // Emerald green
+        "ruby" -> Color(0xFFFF1744)     // Ruby red
+        "amethyst" -> Color(0xFFD500F9) // Amethyst purple
+        "obsidian" -> Color(0xFF555555) // Dark obsidian grey
+        "cosmic" -> Color(0xFFBB86FC)   // Cosmic dream purple
+        "godly" -> Color(0xFFFFD54F)    // Divine radiant yellow
+        else -> Color.White
+    }
+}
+
+fun getTierLabelColor(tier: String, isCompleted: Boolean): Color {
+    if (!isCompleted) return Color(0xFF917576)
+    return when(tier) {
+        "bronze" -> Color(0xFFD7CCC8)
+        "silver" -> Color(0xFFECEFF1)
+        "gold" -> Color(0xFFFFF9C4)
+        "diamond" -> Color(0xFFE0F7FA)
+        "platinum" -> Color(0xFFECEFF1)
+        "sapphire" -> Color(0xFFBBDEFB)
+        "emerald" -> Color(0xFFE8F5E9)
+        "ruby" -> Color(0xFFFFEBEE)
+        "amethyst" -> Color(0xFFE1BEE7)
+        "obsidian" -> Color(0xFFCFD8DC)
+        "cosmic" -> Color(0xFFF3E5F5)
+        "godly" -> Color(0xFFFFE082)
+        else -> Color.White
+    }
+}
+
+fun getAchievementsList(state: GameState): List<CandyAchievementItem> {
+    val items = mutableListOf<CandyAchievementItem>()
+    
+    // 1. Sugar Towers
+    val towers = listOf(
+        // Level, Tier, Title, Description
+        10 to ("bronze" to Triple("Glazed Foundation", "🗼", "Build a stable foundation with 10 Sugar Towers.")),
+        25 to ("silver" to Triple("Glazed Foundations", "🗼", "Let your sugar reach the sky with 25 Sugar Towers.")),
+        50 to ("gold" to Triple("Crystalline Spoke", "🗼", "Fusing crystals into 50 towering monuments of glaze.")),
+        100 to ("diamond" to Triple("Atmospheric Spun Spire", "🗼", "A historical milestone: 100 high-gravity towers of pure sugar.")),
+        150 to ("platinum" to Triple("Sub-Orbital Confection", "🗼", "Erect 150 towers that break into sub-orbital space.")),
+        200 to ("sapphire" to Triple("Stratospheric Sweets", "🗼", "Power 200 towers that reach into the cold stratosphere.")),
+        250 to ("emerald" to Triple("Ionosphere Crunch", "🗼", "Spark electrostatic sweet storms at 250 towers.")),
+        300 to ("ruby" to Triple("Mesosphere Malt", "🗼", "Solidify 300 towers in the mesosphere.")),
+        350 to ("amethyst" to Triple("Thermosphere Toffee", "🗼", "Glaze 350 towers under thermosphere heat.")),
+        400 to ("obsidian" to Triple("Exosphere Eclipse", "🗼", "Black out the sun with 400 space towers.")),
+        450 to ("cosmic" to Triple("Cosmic Caramel Core", "🗼", "Connect 450 towers to cosmic gravity.")),
+        500 to ("godly" to Triple("Universal Sugar Singularity", "🗼", "500 towers distort space-time into sweet candy."))
+    )
+    towers.forEach { (lvl, data) ->
+        val (tier, info) = data
+        items.add(
+            CandyAchievementItem(
+                id = "tower_$lvl",
+                name = info.first,
+                category = "Sugar Towers",
+                upgradeId = "click",
+                targetLevel = lvl,
+                emoji = info.second,
+                description = info.third,
+                tier = tier,
+                currentLevel = state.clickPowerLevel
+            )
+        )
+    }
+
+    // 2. Candy Drones
+    val drones = listOf(
+        10 to ("bronze" to Triple("Bee Buzzers", "🐝", "Purchase 10 drones to hum sweet sugar songs.")),
+        25 to ("silver" to Triple("Precision Buzzers", "🐝", "Establish active syrup exploration with 25 Candy Drones.")),
+        50 to ("gold" to Triple("Honeycomb Hull", "🐝", "Beaming sugar coords from 50 autonomous mechanical bees.")),
+        100 to ("diamond" to Triple("Advanced Radar Honey", "🐝", "100 super-drones synchronized into one cosmic confectionery hive.")),
+        150 to ("platinum" to Triple("Sweet Propeller Blades", "🐝", "Equip 150 drones with elite silent propellers.")),
+        200 to ("sapphire" to Triple("Quantum Swarms", "🐝", "Run 200 drones exhibiting quantum entanglement.")),
+        250 to ("emerald" to Triple("Stardust Wings", "🐝", "Glow in space with 250 stardust-winged scouts.")),
+        300 to ("ruby" to Triple("Nano-Confection Thrusters", "🐝", "Drive 300 drones using microscopic candy thrusters.")),
+        350 to ("amethyst" to Triple("Interstellar Syrup Guidance", "🐝", "Guide 350 drones across star systems.")),
+        400 to ("obsidian" to Triple("Antimatter Sugar Propellers", "🐝", "Launch 400 antimatter-propelled sweet drones.")),
+        450 to ("cosmic" to Triple("Dimension-Flipping Wings", "🐝", "Fleet of 450 drones warping between dimensions.")),
+        500 to ("godly" to Triple("Infinite Hivemind Drone", "🐝", "Achieve 500 drones forming an omniscient collective mind."))
+    )
+    drones.forEach { (lvl, data) ->
+        val (tier, info) = data
+        items.add(
+            CandyAchievementItem(
+                id = "drone_$lvl",
+                name = info.first,
+                category = "Candy Drones",
+                upgradeId = "drone",
+                targetLevel = lvl,
+                emoji = info.second,
+                description = info.third,
+                tier = tier,
+                currentLevel = state.candyDroneLevel
+            )
+        )
+    }
+
+    // 3. Gingerbread Mills
+    val mills = listOf(
+        10 to ("bronze" to Triple("Sweet Butter Cogs", "🍪", "Set 10 warm ovens spinning.")),
+        25 to ("silver" to Triple("Reinforced Sails", "🍪", "Bake crispy cookies non-stop with 25 Gingerbread Mills.")),
+        50 to ("gold" to Triple("Flour-Power Gears", "🍪", "50 high-pressure sugar ovens blasting gingerbread heat.")),
+        100 to ("diamond" to Triple("Sweet Butter Axles", "🍪", "100 Gingerbread Mills fused into a tasty matrix of warm cinnamon.")),
+        150 to ("platinum" to Triple("Superheated Sugar Ovens", "🍪", "Bake at extreme temperatures with 150 ovens.")),
+        200 to ("sapphire" to Triple("Nuclear Yeasting Chambers", "🍪", "Accelerate rising with 200 nuclear bakers.")),
+        250 to ("emerald" to Triple("Quantum Flour Grinders", "🍪", "Feed 250 mills with subatomic flour grinding.")),
+        300 to ("ruby" to Triple("Hyperdimensional Crust", "🍪", "Form 300 mills with folding multi-dimensional crusts.")),
+        350 to ("amethyst" to Triple("Cosmic Molasses Turbines", "🍪", "Spin 350 heavy molasses turbos.")),
+        400 to ("obsidian" to Triple("Singularity Spicers", "🍪", "Spice up 400 mills using gravity pinch-wells.")),
+        450 to ("cosmic" to Triple("Dark Energy Bakeries", "🍪", "Infuse 450 mills with expanding dark sugar heat.")),
+        500 to ("godly" to Triple("God-Tier Gingerbread Matrix", "🍪", "Transcend baking: 500 mills generating infinite dough."))
+    )
+    mills.forEach { (lvl, data) ->
+        val (tier, info) = data
+        items.add(
+            CandyAchievementItem(
+                id = "ginger_$lvl",
+                name = info.first,
+                category = "Gingerbread Mills",
+                upgradeId = "gingerbread",
+                targetLevel = lvl,
+                emoji = info.second,
+                description = info.third,
+                tier = tier,
+                currentLevel = state.gingerbreadLevel
+            )
+        )
+    }
+
+    // 4. Cotton Clouds
+    val clouds = listOf(
+        10 to ("bronze" to Triple("Spun Sugar Wisps", "☁️", "Float 10 sugar vaporizers into the atmosphere.")),
+        25 to ("silver" to Triple("Humid Spun Condensers", "☁️", "Unleash pink confectionery storms with 25 Cotton Clouds.")),
+        50 to ("gold" to Triple("Cumulus Candy Shifters", "☁️", "50 high-pressure syrup clouds covering cookie horizons.")),
+        100 to ("diamond" to Triple("Altocumulus Evaporators", "☁️", "100 clouds generating endless rainstorms of crystallizing sweet syrup.")),
+        150 to ("platinum" to Triple("High-Pressure Sugar Vapor", "☁️", "Condense sweet vapor under 150 pressure jets.")),
+        200 to ("sapphire" to Triple("Stormy Fudge Fronts", "☁️", "Form 200 turbulent dark fudge fronts.")),
+        250 to ("emerald" to Triple("Meteorological Sweetness", "☁️", "Master global sweet weather with 250 clouds.")),
+        300 to ("ruby" to Triple("Stratocumulus Crystallizers", "☁️", "Float 300 crystallizing stratocumulus structures.")),
+        350 to ("amethyst" to Triple("Supersonic Candy Storms", "☁️", "Blast 350 supersonic sugar winds.")),
+        400 to ("obsidian" to Triple("Anticyclonic Sugar Jets", "☁️", "Counter-rotate 400 cyclones of whipped topping.")),
+        450 to ("cosmic" to Triple("Tropospheric Syrup Rain", "☁️", "Pour torrential caramel from 450 clouds.")),
+        500 to ("godly" to Triple("Nebula Sweet Mist Synthesis", "☁️", "Generate space-born gas nebulae of pure cotton."))
+    )
+    clouds.forEach { (lvl, data) ->
+        val (tier, info) = data
+        items.add(
+            CandyAchievementItem(
+                id = "cotton_$lvl",
+                name = info.first,
+                category = "Cotton Clouds",
+                upgradeId = "cotton",
+                targetLevel = lvl,
+                emoji = info.second,
+                description = info.third,
+                tier = tier,
+                currentLevel = state.cottonCloudLevel
+            )
+        )
+    }
+
+    // 5. Chocolate Volcanoes
+    val volcanoes = listOf(
+        10 to ("bronze" to Triple("Warm Cocoa Fountains", "🌋", "Quake the fudge floors with 10 lava chocolate vents.")),
+        25 to ("silver" to Triple("Magma Fudge Stirrers", "🌋", "Erupt magma fudge continuously with 25 Chocolate Volcanoes.")),
+        50 to ("gold" to Triple("Geothermal Caramel Cracks", "🌋", "Fusing 50 planetary volcano cores into dark cocoa eruptions.")),
+        100 to ("diamond" to Triple("Volcanic Syrup Vents", "🌋", "Core deep chocolate extraction powered by 100 infinite volcanoes.")),
+        150 to ("platinum" to Triple("Eruptive Chocolate Plumes", "🌋", "Shoot dark chocolate 150 times into space.")),
+        200 to ("sapphire" to Triple("Tectonic Fudge Plates", "🌋", "Move continental plates over 200 lava pools.")),
+        250 to ("emerald" to Triple("Superheated Volcano Core", "🌋", "Heat 250 volcano cores past smelting temperatures.")),
+        300 to ("ruby" to Triple("Pyroclastic Candy Flows", "🌋", "Sweep cookie plains with 300 pyroclastic rivers.")),
+        350 to ("amethyst" to Triple("Subterranean Cocoa Chambers", "🌋", "Expand deep caves of cocoa across 350 vents.")),
+        400 to ("obsidian" to Triple("Mantle Chocolate Conduits", "🌋", "Tap 400 conduits into planetary syrup mantles.")),
+        450 to ("cosmic" to Triple("Core Sweetness Extractors", "🌋", "Mine core magma with 450 ultra-deep wells.")),
+        500 to ("godly" to Triple("Supernova Fudge Eruption", "🌋", "Blast 500 volcanoes culminating in a cosmic supernova!"))
+    )
+    volcanoes.forEach { (lvl, data) ->
+        val (tier, info) = data
+        items.add(
+            CandyAchievementItem(
+                id = "volcano_$lvl",
+                name = info.first,
+                category = "Chocolate Volcanoes",
+                upgradeId = "volcano",
+                targetLevel = lvl,
+                emoji = info.second,
+                description = info.third,
+                tier = tier,
+                currentLevel = state.chocolateVolcanoLevel
+            )
+        )
+    }
+
+    // 6. Sugar Earths
+    val earths = listOf(
+        10 to ("bronze" to Triple("Sugary Continents", "🌍", "Form 10 beautiful chocolate globes of icing soil.")),
+        25 to ("silver" to Triple("Thick Caramel Crust", "🌍", "Flow warm caramel oceans over 25 massive Sugar Earth planets.")),
+        50 to ("gold" to Triple("Tectonic Sugar Shifts", "🌍", "Protect your confectionery planet biosphere with 50 systems.")),
+        100 to ("diamond" to Triple("Continental Sweets", "🌍", "Construct 100 deep-mantle chocolate worlds with perfect sweet orbits.")),
+        150 to ("platinum" to Triple("Biosphere Fudge", "🌍", "Support organic frosting life on 150 earths.")),
+        200 to ("sapphire" to Triple("Atmospheric Icing Core", "🌍", "Enshroud 200 worlds in sweet icing shells.")),
+        250 to ("emerald" to Triple("Magnetic Syrup Fields", "🌍", "Shield 250 planets with magnetic caramel dynamos.")),
+        300 to ("ruby" to Triple("Super-Deep Chocolate Mantle", "🌍", "Solidify mantles across 300 chocolate globes.")),
+        350 to ("amethyst" to Triple("Sweet Ocean Tides", "🌍", "Pull massive syrup tides across 350 planets.")),
+        400 to ("obsidian" to Triple("Heliospheric Sugar Shield", "🌍", "Envelop 400 earths in heliospheric defense.")),
+        450 to ("cosmic" to Triple("Gravitational Caramel Pull", "🌍", "Link 450 worlds in perfect orbital sweet locks.")),
+        500 to ("godly" to Triple("Gaia Sweet World Alignment", "🌍", "Align 500 planets in a cosmic-scale grand candy design."))
+    )
+    earths.forEach { (lvl, data) ->
+        val (tier, info) = data
+        items.add(
+            CandyAchievementItem(
+                id = "earth_$lvl",
+                name = info.first,
+                category = "Sugar Earths",
+                upgradeId = "earth",
+                targetLevel = lvl,
+                emoji = info.second,
+                description = info.third,
+                tier = tier,
+                currentLevel = state.sugarEarthLevel
+            )
+        )
+    }
+
+    // 7. Lollipop Galaxies
+    val galaxies = listOf(
+        10 to ("bronze" to Triple("Syrup Star Clusters", "🌌", "Ignite 10 sugar stars in newborn swirl nebulae.")),
+        25 to ("silver" to Triple("Solar Syrup Flares", "🌌", "Draw cosmic candy shapes across the void with 25 Lollipop Galaxies.")),
+        50 to ("gold" to Triple("Nebular Candy Nurseries", "🌌", "50 swirling black holes pulling dark matter caramel inside.")),
+        100 to ("diamond" to Triple("Interstellar Sweet Clusters", "🌌", "100 galaxies linked together into an infinite web of universal confectionery.")),
+        150 to ("platinum" to Triple("Lollipop Constellations", "🌌", "Map 150 galactic swirl alignments.")),
+        200 to ("sapphire" to Triple("Wormhole Candy Chutes", "🌌", "Fast-travel sugar across 200 dimensional tunnels.")),
+        250 to ("emerald" to Triple("Supermassive Sugar Hole", "🌌", "Collapse 250 galactic cores into massive syrup gravity wells.")),
+        300 to ("ruby" to Triple("Quasar Confection Jets", "🌌", "Shoot 300 high-energy caramel quasar beams.")),
+        350 to ("amethyst" to Triple("Dark Matter Caramel", "🌌", "Discover 350 galaxies of invisible sweet dark matter.")),
+        400 to ("obsidian" to Triple("Cosmic String Liquorice", "🌌", "Spin 400 galactic webs using cosmic liquorice threads.")),
+        450 to ("cosmic" to Triple("Event Horizon Candies", "🌌", "Harvest candies crossing 450 black hole horizons.")),
+        500 to ("godly" to Triple("Multiverse Sweet Singularity", "🌌", "Converge 500 galaxies into an eternal confectionery nexus."))
+    )
+    galaxies.forEach { (lvl, data) ->
+        val (tier, info) = data
+        items.add(
+            CandyAchievementItem(
+                id = "galaxy_$lvl",
+                name = info.first,
+                category = "Lollipop Galaxies",
+                upgradeId = "galaxy",
+                targetLevel = lvl,
+                emoji = info.second,
+                description = info.third,
+                tier = tier,
+                currentLevel = state.lollipopGalaxyLevel
+            )
+        )
+    }
+
+    // 8. Tapping Masteries / Catalyst Tools
+    items.add(
+        CandyAchievementItem(
+            id = "tapping_spatula_5",
+            name = "Glass Spores",
+            category = "Catalyst Tools",
+            upgradeId = "spatula",
+            targetLevel = 5,
+            emoji = "🍳",
+            description = "Upgrade Golden Spatula 5 times for a clean scraper.",
+            tier = "bronze",
+            currentLevel = state.goldenSpatulaLevel
+        )
+    )
+    items.add(
+        CandyAchievementItem(
+            id = "tapping_spatula_15",
+            name = "Alchemist Scraper",
+            category = "Catalyst Tools",
+            upgradeId = "spatula",
+            targetLevel = 15,
+            emoji = "🍳",
+            description = "Purchase 15 Golden Spatulas for ultra pure tap refining.",
+            tier = "silver",
+            currentLevel = state.goldenSpatulaLevel
+        )
+    )
+    items.add(
+        CandyAchievementItem(
+            id = "tapping_synergies_5",
+            name = "Sugar Catalyst",
+            category = "Catalyst Tools",
+            upgradeId = "synergies",
+            targetLevel = 5,
+            emoji = "🧪",
+            description = "Unlock 5 levels of Sweet Synergies to link automated producers.",
+            tier = "gold",
+            currentLevel = state.sweetSynergiesLevel
+        )
+    )
+    items.add(
+        CandyAchievementItem(
+            id = "tapping_munch_5",
+            name = "Primal Muncher",
+            category = "Catalyst Tools",
+            upgradeId = "munch",
+            targetLevel = 5,
+            emoji = "🦖",
+            description = "Leap into dinosaur level confectionery with 5 Critical Munch upgrades.",
+            tier = "diamond",
+            currentLevel = state.criticalMunchLevel
+        )
+    )
+
+    return items
+}
+
+@Composable
+fun CandyStoreShelf(
+    shelfName: String,
+    shelfIcon: String,
+    achievements: List<CandyAchievementItem>,
+    onAchievementSelected: (CandyAchievementItem) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)
+    ) {
+        // Shelf Title Label (e.g. "SUGAR TOWERS 🗼")
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp)
+        ) {
+            Text(
+                text = "$shelfIcon ${shelfName.uppercase()}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp,
+                color = Color(0xFFFFD54F)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        // Horizontal Scrollable Row of achievements sitting on the shelf
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            achievements.forEach { achievement ->
+                AchievementJarItem(
+                    achievement = achievement,
+                    onClick = { onAchievementSelected(achievement) }
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(2.dp))
+        
+        // The wooden shelf plank itself
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(12.dp)
+                .padding(horizontal = 4.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFB07D62), // Bevel light highlight
+                            Color(0xFF8D5B4C), // Wooden light brown
+                            Color(0xFF5C3A21)  // Dark shadow brown
+                        )
+                    )
+                )
+                .shadow(
+                    elevation = 4.dp,
+                    shape = RoundedCornerShape(3.dp)
+                )
+        )
+    }
+}
+
+@Composable
+fun AchievementJarItem(
+    achievement: CandyAchievementItem,
+    onClick: () -> Unit
+) {
+    val isCompleted = achievement.currentLevel >= achievement.targetLevel
+    val tierColor = getTierColor(achievement.tier)
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(68.dp)
+            .clickable { onClick() }
+            .padding(vertical = 4.dp)
+    ) {
+        // The Glass Candy Jar!
+        Box(
+            modifier = Modifier
+                .width(52.dp)
+                .height(64.dp)
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 8.dp, bottomEnd = 8.dp))
+                .background(
+                    if (isCompleted) {
+                        Color.White.copy(alpha = 0.15f) // Shiny transparent glass look
+                    } else {
+                        Color.Black.copy(alpha = 0.25f) // Dusty/dark empty jar look
+                    }
+                )
+                .border(
+                    width = 1.5.dp,
+                    color = if (isCompleted) tierColor else Color.White.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            // Shiny reflection line on the left of glass jar to make it look hyper-polished!
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(4.dp)
+                    .align(Alignment.CenterStart)
+                    .padding(start = 2.dp, top = 8.dp, bottom = 8.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.25f))
+            )
+            
+            // Jar wood/metallic cap at top
+            Box(
+                modifier = Modifier
+                    .width(32.dp)
+                    .height(6.dp)
+                    .align(Alignment.TopCenter)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        if (isCompleted) {
+                            tierColor
+                        } else {
+                            Color(0xFF5C3A21).copy(alpha = 0.5f)
+                        }
+                    )
+            )
+            
+            // Jar contents (the emoji!)
+            Box(
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isCompleted) {
+                    Text(
+                        text = achievement.emoji,
+                        fontSize = 24.sp,
+                        modifier = Modifier.scale(1.1f)
+                    )
+                } else {
+                    // Gray silhouette with lock
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = achievement.emoji,
+                            fontSize = 22.sp,
+                            modifier = Modifier.alpha(0.12f)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        // Label underneath (Target Level)
+        Text(
+            text = "Lvl ${achievement.targetLevel}",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = getTierLabelColor(achievement.tier, isCompleted)
+        )
     }
 }

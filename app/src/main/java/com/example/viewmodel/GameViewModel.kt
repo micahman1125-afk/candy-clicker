@@ -151,12 +151,18 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
-    fun buyUpgrade(upgradeId: String) {
+    fun buyUpgrade(upgradeId: String, count: Int = 1) {
         val currentState = _gameState.value
         val list = getUpgradeItems(currentState)
         val selected = list.find { it.id == upgradeId } ?: return
 
-        if (currentState.candies >= selected.cost) {
+        val costToUse = if (selected.isBuilding && count > 1) {
+            calculateMultiCost(selected.baseCost, selected.level, count, selected.costMultiplier)
+        } else {
+            selected.cost
+        }
+
+        if (currentState.candies >= costToUse) {
             val isIntervalUpgrade = upgradeId.contains("_")
             updateState {
                 val newPurchased = if (isIntervalUpgrade) {
@@ -165,20 +171,45 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     purchasedUpgrades
                 }
                 copy(
-                    candies = candies - selected.cost,
+                    candies = candies - costToUse,
                     purchasedUpgrades = newPurchased,
-                    clickPowerLevel = if (upgradeId == "click") clickPowerLevel + 1 else clickPowerLevel,
-                    candyDroneLevel = if (upgradeId == "drone") candyDroneLevel + 1 else candyDroneLevel,
-                    gingerbreadLevel = if (upgradeId == "gingerbread") gingerbreadLevel + 1 else gingerbreadLevel,
-                    cottonCloudLevel = if (upgradeId == "cotton") cottonCloudLevel + 1 else cottonCloudLevel,
-                    chocolateVolcanoLevel = if (upgradeId == "volcano") chocolateVolcanoLevel + 1 else chocolateVolcanoLevel,
-                    sugarEarthLevel = if (upgradeId == "earth") sugarEarthLevel + 1 else sugarEarthLevel,
-                    lollipopGalaxyLevel = if (upgradeId == "galaxy") lollipopGalaxyLevel + 1 else lollipopGalaxyLevel,
+                    clickPowerLevel = if (upgradeId == "click") clickPowerLevel + count else clickPowerLevel,
+                    candyDroneLevel = if (upgradeId == "drone") candyDroneLevel + count else candyDroneLevel,
+                    gingerbreadLevel = if (upgradeId == "gingerbread") gingerbreadLevel + count else gingerbreadLevel,
+                    cottonCloudLevel = if (upgradeId == "cotton") cottonCloudLevel + count else cottonCloudLevel,
+                    chocolateVolcanoLevel = if (upgradeId == "volcano") chocolateVolcanoLevel + count else chocolateVolcanoLevel,
+                    sugarEarthLevel = if (upgradeId == "earth") sugarEarthLevel + count else sugarEarthLevel,
+                    lollipopGalaxyLevel = if (upgradeId == "galaxy") lollipopGalaxyLevel + count else lollipopGalaxyLevel,
                     goldenSpatulaLevel = if (upgradeId == "spatula") goldenSpatulaLevel + 1 else goldenSpatulaLevel,
                     sweetSynergiesLevel = if (upgradeId == "synergies") sweetSynergiesLevel + 1 else sweetSynergiesLevel,
                     criticalMunchLevel = if (upgradeId == "munch") criticalMunchLevel + 1 else criticalMunchLevel
                 )
             }
+        }
+    }
+
+    fun sellUpgrade(upgradeId: String, count: Int = 1) {
+        val currentState = _gameState.value
+        val list = getUpgradeItems(currentState)
+        val selected = list.find { it.id == upgradeId } ?: return
+        if (!selected.isBuilding) return
+
+        val actualCount = minOf(count, selected.level)
+        if (actualCount <= 0) return
+
+        val refundAmount = calculateMultiCost(selected.baseCost, selected.level - actualCount, actualCount, selected.costMultiplier) * 0.5
+
+        updateState {
+            copy(
+                candies = candies + refundAmount,
+                clickPowerLevel = if (upgradeId == "click") maxOf(0, clickPowerLevel - actualCount) else clickPowerLevel,
+                candyDroneLevel = if (upgradeId == "drone") maxOf(0, candyDroneLevel - actualCount) else candyDroneLevel,
+                gingerbreadLevel = if (upgradeId == "gingerbread") maxOf(0, gingerbreadLevel - actualCount) else gingerbreadLevel,
+                cottonCloudLevel = if (upgradeId == "cotton") maxOf(0, cottonCloudLevel - actualCount) else cottonCloudLevel,
+                chocolateVolcanoLevel = if (upgradeId == "volcano") maxOf(0, chocolateVolcanoLevel - actualCount) else chocolateVolcanoLevel,
+                sugarEarthLevel = if (upgradeId == "earth") maxOf(0, sugarEarthLevel - actualCount) else sugarEarthLevel,
+                lollipopGalaxyLevel = if (upgradeId == "galaxy") maxOf(0, lollipopGalaxyLevel - actualCount) else lollipopGalaxyLevel
+            )
         }
     }
 
@@ -203,9 +234,17 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    fun toggleLollipopMovement() {
+        updateState {
+            copy(lollipopMovementOn = !lollipopMovementOn)
+        }
+    }
+
     fun prestige() {
         val currentState = _gameState.value
-        if (currentState.candies >= 1_000_000_000_000.0) {
+        val prestigeGoal = 1_000_000_000_000.0
+        if (currentState.candies >= prestigeGoal) {
+            val pointsToClaim = (currentState.candies / prestigeGoal).toLong()
             updateState {
                 copy(
                     candies = 0.0,
@@ -219,7 +258,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     goldenSpatulaLevel = 0,
                     sweetSynergiesLevel = 0,
                     criticalMunchLevel = 0,
-                    prestigePoints = prestigePoints + 1,
+                    prestigePoints = prestigePoints + pointsToClaim,
                     purchasedUpgrades = ""
                 )
             }
@@ -238,7 +277,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     fun getClickPower(state: GameState): Double {
-        val multiplier = 1.0 + state.prestigePoints * 1.0 // +100% click power boost per prestige point!
+        val multiplier = 1.0 + state.prestigePoints * 0.01 // +1% click power boost per prestige point!
         val basePower = 1.0 + (state.goldenSpatulaLevel * 2.5) + (state.criticalMunchLevel * 12.0)
         return basePower * multiplier
     }
@@ -257,7 +296,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     fun getCps(state: GameState): Double {
-        val multiplier = (1.0 + state.prestigePoints * 1.0) * (1.0 + state.sweetSynergiesLevel * 0.15) // +15% CPS boost per synergy level!
+        val multiplier = (1.0 + state.prestigePoints * 0.01) * (1.0 + state.sweetSynergiesLevel * 0.15) // +15% CPS boost per synergy level!
         
         val clickMult = getBuildingMultiplier(state, "click")
         val droneMult = getBuildingMultiplier(state, "drone")
@@ -561,6 +600,14 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     private fun calculateCost(base: Double, level: Int, multiplier: Double = 1.15): Double {
         return base * multiplier.pow(level.toDouble())
+    }
+
+    fun calculateMultiCost(base: Double, currentLevel: Int, count: Int, multiplier: Double = 1.15): Double {
+        var total = 0.0
+        for (i in 0 until count) {
+            total += base * multiplier.pow((currentLevel + i).toDouble())
+        }
+        return total
     }
 
     fun formatValue(value: Double): String {

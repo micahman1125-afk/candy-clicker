@@ -14,8 +14,8 @@ android {
     applicationId = "com.aistudio.candyclicker.zpywkq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.1"
+    versionCode = 4
+    versionName = "1.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -119,3 +119,42 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+abstract class CopyApkTask : DefaultTask() {
+    @get:org.gradle.api.tasks.Internal
+    abstract val apkDir: org.gradle.api.file.DirectoryProperty
+
+    @get:org.gradle.api.tasks.Internal
+    abstract val rootDirProp: org.gradle.api.file.DirectoryProperty
+
+    @org.gradle.api.tasks.TaskAction
+    fun copyApk() {
+        val src = apkDir.file("app-debug.apk").get().asFile
+        if (src.exists()) {
+            val rootDir = rootDirProp.get().asFile
+            
+            // Copy to root workspace
+            val destRoot = File(rootDir, "app-debug.apk")
+            src.copyTo(destRoot, overwrite = true)
+            println("Successfully copied APK to root workspace: ${destRoot.absolutePath}")
+
+            // Copy to .build-outputs/app-debug.apk
+            val destBuild = File(rootDir, ".build-outputs/app-debug.apk")
+            destBuild.parentFile?.mkdirs()
+            src.copyTo(destBuild, overwrite = true)
+            println("Successfully copied APK to .build-outputs: ${destBuild.absolutePath}")
+        }
+    }
+}
+
+tasks.register<CopyApkTask>("copyApkToRootTask") {
+    apkDir.set(layout.buildDirectory.dir("outputs/apk/debug"))
+    rootDirProp.set(project.rootProject.layout.projectDirectory)
+}
+
+tasks.whenTaskAdded {
+    if (name == "assembleDebug") {
+        finalizedBy("copyApkToRootTask")
+    }
+}
+

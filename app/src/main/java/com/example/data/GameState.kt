@@ -26,6 +26,7 @@ data class GameState(
     // Settings & Prestige
     val soundOn: Boolean = true,
     val vibrationOn: Boolean = true,
+    val lollipopMovementOn: Boolean = true,
     val prestigePoints: Long = 0L,
     val purchasedUpgrades: String = ""
 )
