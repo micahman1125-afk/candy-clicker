@@ -1,0 +1,14 @@
+package com.example
+
+import android.app.Application
+import com.example.data.AppDatabase
+import com.example.data.GameRepository
+
+class CandyApplication : Application() {
+    val database by lazy { AppDatabase.getDatabase(this) }
+    val repository by lazy { GameRepository(database.gameStateDao()) }
+
+    override fun getAttributionTag(): String? {
+        return "audio"
+    }
+}

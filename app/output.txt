@@ -1,0 +1,1 @@
+Remaining colored bounds after simulation: X:[200 to 824], Y:[80 to 960] | Non-transparent: 307287

@@ -1,0 +1,6 @@
+{
+  "name": "Candy Clicker",
+  "description": "Unlock delicious upgrades, buy sweet automated candy makers, and click your way to becoming the ultimate Candy Tycoon!",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

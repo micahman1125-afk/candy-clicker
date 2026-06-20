@@ -1,0 +1,1 @@
+Output data - Bounding box: X:[200 to 827], Y:[80 to 966] | Furthest pixel: (821, 915), dist 507.8287112796991, color: R:243 G:242 B:240
