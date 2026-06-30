@@ -10,6 +10,10 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.text.font.FontFamily
+
 private val DarkColorScheme =
   darkColorScheme(primary = Purple80, secondary = PurpleGrey80, tertiary = Pink80)
 
@@ -48,5 +52,11 @@ fun MyApplicationTheme(
       else -> LightColorScheme
     }
 
-  MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+  MaterialTheme(colorScheme = colorScheme, typography = Typography) {
+    CompositionLocalProvider(
+      LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = TimesNewRoman)
+    ) {
+      content()
+    }
+  }
 }

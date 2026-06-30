@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Candy Clicker</string>
+    <string name="attribution_audio">Audio playback</string>
+    <string name="vibrate_attribution_label">Vibration haptics</string>
 </resources>

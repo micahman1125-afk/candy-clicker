@@ -6,16 +6,18 @@ plugins {
   alias(libs.plugins.secrets)
 }
 
+import java.util.zip.ZipFile
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.candyclicker.zpywkq"
+    applicationId = "com.aistudio.candyclicker.nwqypt"
     minSdk = 24
-    targetSdk = 36
-    versionCode = 4
-    versionName = "1.3"
+    targetSdk = 35
+    versionCode = 11
+    versionName = "2.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -40,10 +42,14 @@ android {
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
+      isShrinkResources = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      isMinifyEnabled = false
+      isShrinkResources = false
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("debugConfig")
     }
   }
@@ -56,6 +62,11 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  lint {
+    disable.add("AndroidGradlePluginVersion")
+    disable.add("GradleDependency")
+    disable.add("NewerVersionAvailable")
+  }
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
@@ -69,7 +80,7 @@ secrets {
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
-  implementation(platform(libs.firebase.bom))
+  // implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
   // implementation(libs.androidx.camera.camera2)
@@ -87,19 +98,20 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
+  // implementation("androidx.compose.ui:ui-text-google-fonts")
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   // implementation(libs.coil.compose)
-  implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
+  // implementation(libs.converter.moshi)
+  // implementation(libs.firebase.ai)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
-  implementation(libs.okhttp)
+  // implementation(libs.logging.interceptor)
+  // implementation(libs.moshi.kotlin)
+  // implementation(libs.okhttp)
   // implementation(libs.play.services.location)
-  implementation(libs.retrofit)
+  // implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
@@ -136,13 +148,40 @@ abstract class CopyApkTask : DefaultTask() {
             // Copy to root workspace
             val destRoot = File(rootDir, "app-debug.apk")
             src.copyTo(destRoot, overwrite = true)
-            println("Successfully copied APK to root workspace: ${destRoot.absolutePath}")
+            println("Successfully copied APK to root workspace: ${destRoot.absolutePath} (Size: ${destRoot.length()} bytes)")
+
+            // Inspect zip entries of the APK to find large files
+            try {
+                ZipFile(src).use { zip ->
+                    val entries = zip.entries().asSequence().toList()
+                    println("=== Top 15 Largest Files inside APK ===")
+                    entries.sortedByDescending { it.size }
+                        .take(15)
+                        .forEach { entry ->
+                            println("${entry.name}: size = ${entry.size} bytes, compressed = ${entry.compressedSize} bytes")
+                        }
+                }
+            } catch (e: Exception) {
+                println("Failed to read zip entries: ${e.message}")
+            }
+
+            // List sizes of image files in res/drawable and res/drawable-nodpi
+            val drawableDir = File(rootDir, "app/src/main/res/drawable")
+            val drawableNodpiDir = File(rootDir, "app/src/main/res/drawable-nodpi")
+            println("=== File Sizes in res/drawable ===")
+            drawableDir.listFiles()?.forEach { file ->
+                println("${file.name}: ${file.length()} bytes")
+            }
+            println("=== File Sizes in res/drawable-nodpi ===")
+            drawableNodpiDir.listFiles()?.forEach { file ->
+                println("${file.name}: ${file.length()} bytes")
+            }
 
             // Copy to .build-outputs/app-debug.apk
             val destBuild = File(rootDir, ".build-outputs/app-debug.apk")
             destBuild.parentFile?.mkdirs()
             src.copyTo(destBuild, overwrite = true)
-            println("Successfully copied APK to .build-outputs: ${destBuild.absolutePath}")
+            println("Successfully copied APK to .build-outputs: ${destBuild.absolutePath} (Size: ${destBuild.length()} bytes)")
         }
     }
 }

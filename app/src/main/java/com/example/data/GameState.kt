@@ -8,6 +8,7 @@ data class GameState(
     @PrimaryKey val id: Int = 1,
     val candies: Double = 0.0,
     val totalCandiesEarned: Double = 0.0,
+    val totalClickCandiesEarned: Double = 0.0,
     val clickCount: Int = 0,
     val lastActiveTime: Long = System.currentTimeMillis(),
     
@@ -20,8 +21,17 @@ data class GameState(
     val sugarEarthLevel: Int = 0,
     val lollipopGalaxyLevel: Int = 0,
     val goldenSpatulaLevel: Int = 0,
-    val sweetSynergiesLevel: Int = 0,
-    val criticalMunchLevel: Int = 0,
+    val mittLevel: Int = 0,
+
+    // Tower total candy produced trackers (resets on prestige)
+    val mittsTotalEarned: Double = 0.0,
+    val clickTotalEarned: Double = 0.0,
+    val droneTotalEarned: Double = 0.0,
+    val gingerbreadTotalEarned: Double = 0.0,
+    val cottonTotalEarned: Double = 0.0,
+    val volcanoTotalEarned: Double = 0.0,
+    val earthTotalEarned: Double = 0.0,
+    val galaxyTotalEarned: Double = 0.0,
 
     // Settings & Prestige
     val soundOn: Boolean = true,

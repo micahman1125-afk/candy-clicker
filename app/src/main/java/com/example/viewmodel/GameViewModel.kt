@@ -30,6 +30,8 @@ data class UpgradeItem(
     val isBuilding: Boolean = true
 )
 
+
+
 class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     private val _gameState = MutableStateFlow(GameState())
@@ -75,11 +77,28 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 
                 _offlineEarnings.value = earned
                 
-                // Save updated candies
+                // Save updated candies and individual tower totals
                 updateState {
+                    val mittCps = getTowerCps(this, "mitt")
+                    val clickCps = getTowerCps(this, "click")
+                    val droneCps = getTowerCps(this, "drone")
+                    val gingerbreadCps = getTowerCps(this, "gingerbread")
+                    val cottonCps = getTowerCps(this, "cotton")
+                    val volcanoCps = getTowerCps(this, "volcano")
+                    val earthCps = getTowerCps(this, "earth")
+                    val galaxyCps = getTowerCps(this, "galaxy")
+
                     copy(
                         candies = candies + earned,
                         totalCandiesEarned = totalCandiesEarned + earned,
+                        mittsTotalEarned = mittsTotalEarned + (mittCps * cappedSeconds),
+                        clickTotalEarned = clickTotalEarned + (clickCps * cappedSeconds),
+                        droneTotalEarned = droneTotalEarned + (droneCps * cappedSeconds),
+                        gingerbreadTotalEarned = gingerbreadTotalEarned + (gingerbreadCps * cappedSeconds),
+                        cottonTotalEarned = cottonTotalEarned + (cottonCps * cappedSeconds),
+                        volcanoTotalEarned = volcanoTotalEarned + (volcanoCps * cappedSeconds),
+                        earthTotalEarned = earthTotalEarned + (earthCps * cappedSeconds),
+                        galaxyTotalEarned = galaxyTotalEarned + (galaxyCps * cappedSeconds),
                         lastActiveTime = now
                     )
                 }
@@ -105,9 +124,26 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 if (cps > 0) {
                     val generated = cps * deltaSeconds
                     updateState {
+                        val mittCps = getTowerCps(this, "mitt")
+                        val clickCps = getTowerCps(this, "click")
+                        val droneCps = getTowerCps(this, "drone")
+                        val gingerbreadCps = getTowerCps(this, "gingerbread")
+                        val cottonCps = getTowerCps(this, "cotton")
+                        val volcanoCps = getTowerCps(this, "volcano")
+                        val earthCps = getTowerCps(this, "earth")
+                        val galaxyCps = getTowerCps(this, "galaxy")
+
                         copy(
                             candies = candies + generated,
                             totalCandiesEarned = totalCandiesEarned + generated,
+                            mittsTotalEarned = mittsTotalEarned + (mittCps * deltaSeconds),
+                            clickTotalEarned = clickTotalEarned + (clickCps * deltaSeconds),
+                            droneTotalEarned = droneTotalEarned + (droneCps * deltaSeconds),
+                            gingerbreadTotalEarned = gingerbreadTotalEarned + (gingerbreadCps * deltaSeconds),
+                            cottonTotalEarned = cottonTotalEarned + (cottonCps * deltaSeconds),
+                            volcanoTotalEarned = volcanoTotalEarned + (volcanoCps * deltaSeconds),
+                            earthTotalEarned = earthTotalEarned + (earthCps * deltaSeconds),
+                            galaxyTotalEarned = galaxyTotalEarned + (galaxyCps * deltaSeconds),
                             lastActiveTime = now
                         )
                     }
@@ -124,7 +160,25 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     // Actions
     fun onCandyClicked(x: Float, y: Float) {
         val currentState = _gameState.value
-        val clickPower = getClickPower(currentState)
+        val baseClickPower = getClickPower(currentState)
+        val purchasedSet = currentState.purchasedUpgrades.split(",").filter { it.isNotEmpty() }.toSet()
+        var bonusSpatulaPower = 0.0
+        val spatulaList = listOf(
+            "spatula_wooden",
+            "spatula_plastic",
+            "spatula_silicon",
+            "spatula_steel",
+            "spatula_aluminum",
+            "spatula_titanium",
+            "spatula_iridium",
+            "spatula_gold"
+        )
+        for (spatula in spatulaList) {
+            if (purchasedSet.contains(spatula)) {
+                bonusSpatulaPower += getCps(currentState) * 0.01
+            }
+        }
+        val clickPower = baseClickPower + bonusSpatulaPower
         
         // Add floating effect
         val newEffect = FloatingEffect(
@@ -140,6 +194,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             copy(
                 candies = candies + clickPower,
                 totalCandiesEarned = totalCandiesEarned + clickPower,
+                totalClickCandiesEarned = totalClickCandiesEarned + clickPower,
                 clickCount = clickCount + 1
             )
         }
@@ -163,9 +218,9 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
 
         if (currentState.candies >= costToUse) {
-            val isIntervalUpgrade = upgradeId.contains("_")
+            val isUpgrade = !selected.isBuilding
             updateState {
-                val newPurchased = if (isIntervalUpgrade) {
+                val newPurchased = if (isUpgrade) {
                     if (purchasedUpgrades.isEmpty()) upgradeId else "$purchasedUpgrades,$upgradeId"
                 } else {
                     purchasedUpgrades
@@ -180,9 +235,40 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     chocolateVolcanoLevel = if (upgradeId == "volcano") chocolateVolcanoLevel + count else chocolateVolcanoLevel,
                     sugarEarthLevel = if (upgradeId == "earth") sugarEarthLevel + count else sugarEarthLevel,
                     lollipopGalaxyLevel = if (upgradeId == "galaxy") lollipopGalaxyLevel + count else lollipopGalaxyLevel,
-                    goldenSpatulaLevel = if (upgradeId == "spatula") goldenSpatulaLevel + 1 else goldenSpatulaLevel,
-                    sweetSynergiesLevel = if (upgradeId == "synergies") sweetSynergiesLevel + 1 else sweetSynergiesLevel,
-                    criticalMunchLevel = if (upgradeId == "munch") criticalMunchLevel + 1 else criticalMunchLevel
+                    mittLevel = if (upgradeId == "mitts") mittLevel + count else mittLevel
+                )
+            }
+        }
+    }
+
+    fun buyMaxAffordableUpgrades() {
+        val currentState = _gameState.value
+        var candies = currentState.candies
+        val purchasedSet = currentState.purchasedUpgrades.split(",").filter { it.isNotEmpty() }.toMutableSet()
+        
+        var changed = true
+        while (changed) {
+            changed = false
+            val tempState = currentState.copy(
+                candies = candies,
+                purchasedUpgrades = purchasedSet.joinToString(",")
+            )
+            val availableUpgrades = getUpgradeItems(tempState).filter { !it.isBuilding && !purchasedSet.contains(it.id) }
+            val affordable = availableUpgrades.filter { candies >= it.cost }.sortedBy { it.cost }
+            if (affordable.isNotEmpty()) {
+                val toBuy = affordable.first()
+                candies -= toBuy.cost
+                purchasedSet.add(toBuy.id)
+                changed = true
+            }
+        }
+        
+        val finalPurchasedString = purchasedSet.joinToString(",")
+        if (candies != currentState.candies || finalPurchasedString != currentState.purchasedUpgrades) {
+            updateState {
+                copy(
+                    candies = candies,
+                    purchasedUpgrades = finalPurchasedString
                 )
             }
         }
@@ -208,7 +294,8 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 cottonCloudLevel = if (upgradeId == "cotton") maxOf(0, cottonCloudLevel - actualCount) else cottonCloudLevel,
                 chocolateVolcanoLevel = if (upgradeId == "volcano") maxOf(0, chocolateVolcanoLevel - actualCount) else chocolateVolcanoLevel,
                 sugarEarthLevel = if (upgradeId == "earth") maxOf(0, sugarEarthLevel - actualCount) else sugarEarthLevel,
-                lollipopGalaxyLevel = if (upgradeId == "galaxy") maxOf(0, lollipopGalaxyLevel - actualCount) else lollipopGalaxyLevel
+                lollipopGalaxyLevel = if (upgradeId == "galaxy") maxOf(0, lollipopGalaxyLevel - actualCount) else lollipopGalaxyLevel,
+                mittLevel = if (upgradeId == "mitts") maxOf(0, mittLevel - actualCount) else mittLevel
             )
         }
     }
@@ -243,8 +330,9 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     fun prestige() {
         val currentState = _gameState.value
         val prestigeGoal = 1_000_000_000_000.0
-        if (currentState.candies >= prestigeGoal) {
-            val pointsToClaim = (currentState.candies / prestigeGoal).toLong()
+        val totalPrestigeCalculated = (currentState.totalCandiesEarned / prestigeGoal).toLong()
+        val pointsToClaim = totalPrestigeCalculated - currentState.prestigePoints
+        if (pointsToClaim > 0) {
             updateState {
                 copy(
                     candies = 0.0,
@@ -256,8 +344,15 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     sugarEarthLevel = 0,
                     lollipopGalaxyLevel = 0,
                     goldenSpatulaLevel = 0,
-                    sweetSynergiesLevel = 0,
-                    criticalMunchLevel = 0,
+                    mittLevel = 0,
+                    mittsTotalEarned = 0.0,
+                    clickTotalEarned = 0.0,
+                    droneTotalEarned = 0.0,
+                    gingerbreadTotalEarned = 0.0,
+                    cottonTotalEarned = 0.0,
+                    volcanoTotalEarned = 0.0,
+                    earthTotalEarned = 0.0,
+                    galaxyTotalEarned = 0.0,
                     prestigePoints = prestigePoints + pointsToClaim,
                     purchasedUpgrades = ""
                 )
@@ -278,42 +373,133 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     fun getClickPower(state: GameState): Double {
         val multiplier = 1.0 + state.prestigePoints * 0.01 // +1% click power boost per prestige point!
-        val basePower = 1.0 + (state.goldenSpatulaLevel * 2.5) + (state.criticalMunchLevel * 12.0)
+        val purchasedSet = state.purchasedUpgrades.split(",").filter { it.isNotEmpty() }.toSet()
+
+        var mittClickMult = 1.0
+        if (purchasedSet.contains("mitt_up_1")) mittClickMult *= 2.0
+        if (purchasedSet.contains("mitt_up_2")) mittClickMult *= 2.0
+        if (purchasedSet.contains("mitt_up_3")) mittClickMult *= 2.0
+
+        val numNonMitts = state.clickPowerLevel + state.candyDroneLevel + state.gingerbreadLevel + state.cottonCloudLevel + state.chocolateVolcanoLevel + state.sugarEarthLevel + state.lollipopGalaxyLevel
+        var additionalClickPower = 0.0
+        if (purchasedSet.contains("mitt_up_4")) {
+            val qMultiplier = 1.0 * 
+                (if (purchasedSet.contains("mitt_up_5")) 5.0 else 1.0) * 
+                (if (purchasedSet.contains("mitt_up_6")) 10.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_7")) 15.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_8")) 20.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_9")) 20.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_10")) 25.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_11")) 25.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_12")) 25.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_13")) 25.0 else 1.0) *
+                (if (purchasedSet.contains("mitt_up_14")) 100.0 else 1.0)
+            additionalClickPower = 0.1 * numNonMitts * qMultiplier
+        }
+
+        val basePower = (1.0 + additionalClickPower) * mittClickMult
         return basePower * multiplier
     }
 
     fun getBuildingMultiplier(state: GameState, buildingId: String): Double {
         val purchasedSet = state.purchasedUpgrades.split(",").filter { it.isNotEmpty() }.toSet()
-        val intervals = listOf(25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500)
         var boughtCount = 0
-        for (interval in intervals) {
-            val upgradeId = "${buildingId}_$interval"
-            if (purchasedSet.contains(upgradeId)) {
-                boughtCount++
+        if (buildingId == "click") {
+            val clickUpgrades = listOf(
+                "click_up_1_concrete", "click_up_1_bolts", "click_up_10_steel", "click_up_25_cables",
+                "click_up_50_paint", "click_up_100_elevator", "click_up_150_glass", "click_up_200_rivets",
+                "click_up_250_roof", "click_up_300_walls", "click_up_350_tiles", "click_up_400_carpet",
+                "click_up_450_elevator", "click_up_500_stairs"
+            )
+            for (id in clickUpgrades) {
+                if (purchasedSet.contains(id)) {
+                    boughtCount++
+                }
+            }
+        } else {
+            val intervals = listOf(25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500)
+            for (interval in intervals) {
+                val upgradeId = "${buildingId}_$interval"
+                if (purchasedSet.contains(upgradeId)) {
+                    boughtCount++
+                }
             }
         }
         return 2.0.pow(boughtCount.toDouble())
     }
 
-    fun getCps(state: GameState): Double {
-        val multiplier = (1.0 + state.prestigePoints * 0.01) * (1.0 + state.sweetSynergiesLevel * 0.15) // +15% CPS boost per synergy level!
-        
-        val clickMult = getBuildingMultiplier(state, "click")
-        val droneMult = getBuildingMultiplier(state, "drone")
-        val gingerbreadMult = getBuildingMultiplier(state, "gingerbread")
-        val cottonMult = getBuildingMultiplier(state, "cotton")
-        val volcanoMult = getBuildingMultiplier(state, "volcano")
-        val earthMult = getBuildingMultiplier(state, "earth")
-        val galaxyMult = getBuildingMultiplier(state, "galaxy")
+    fun getTowerCps(state: GameState, towerId: String): Double {
+        val multiplier = (1.0 + state.prestigePoints * 0.01)
+        val purchasedSet = state.purchasedUpgrades.split(",").filter { it.isNotEmpty() }.toSet()
 
-        val baseCps = (state.clickPowerLevel * 0.1 * clickMult) +
-               (state.candyDroneLevel * 0.5 * droneMult) +
-               (state.gingerbreadLevel * 4.0 * gingerbreadMult) +
-               (state.cottonCloudLevel * 32.0 * cottonMult) +
-               (state.chocolateVolcanoLevel * 260.0 * volcanoMult) +
-               (state.sugarEarthLevel * 600.0 * earthMult) +
-               (state.lollipopGalaxyLevel * 1400.0 * galaxyMult)
-        return baseCps * multiplier
+        return when (towerId) {
+            "mitt" -> {
+                var mittCpsMult = 1.0
+                if (purchasedSet.contains("mitt_up_1")) mittCpsMult *= 2.0
+                if (purchasedSet.contains("mitt_up_2")) mittCpsMult *= 2.0
+                if (purchasedSet.contains("mitt_up_3")) mittCpsMult *= 2.0
+
+                val numNonMitts = state.clickPowerLevel + state.candyDroneLevel + state.gingerbreadLevel + state.cottonCloudLevel + state.chocolateVolcanoLevel + state.sugarEarthLevel + state.lollipopGalaxyLevel
+                var additionalCpsPower = 0.0
+                if (purchasedSet.contains("mitt_up_4")) {
+                    val qMultiplier = 1.0 * 
+                        (if (purchasedSet.contains("mitt_up_5")) 5.0 else 1.0) * 
+                        (if (purchasedSet.contains("mitt_up_6")) 10.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_7")) 15.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_8")) 20.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_9")) 20.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_10")) 25.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_11")) 25.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_12")) 25.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_13")) 25.0 else 1.0) *
+                        (if (purchasedSet.contains("mitt_up_14")) 100.0 else 1.0)
+                    additionalCpsPower = 0.1 * numNonMitts * qMultiplier
+                }
+
+                val singleMittCps = (0.1 + additionalCpsPower) * mittCpsMult
+                (state.mittLevel * singleMittCps) * multiplier
+            }
+            "click" -> {
+                val clickMult = getBuildingMultiplier(state, "click")
+                (state.clickPowerLevel * 1.0 * clickMult) * multiplier
+            }
+            "drone" -> {
+                val droneMult = getBuildingMultiplier(state, "drone")
+                (state.candyDroneLevel * 12.0 * droneMult) * multiplier
+            }
+            "gingerbread" -> {
+                val gingerbreadMult = getBuildingMultiplier(state, "gingerbread")
+                (state.gingerbreadLevel * 56.0 * gingerbreadMult) * multiplier
+            }
+            "cotton" -> {
+                val cottonMult = getBuildingMultiplier(state, "cotton")
+                (state.cottonCloudLevel * 300.0 * cottonMult) * multiplier
+            }
+            "volcano" -> {
+                val volcanoMult = getBuildingMultiplier(state, "volcano")
+                (state.chocolateVolcanoLevel * 1600.0 * volcanoMult) * multiplier
+            }
+            "earth" -> {
+                val earthMult = getBuildingMultiplier(state, "earth")
+                (state.sugarEarthLevel * 8200.0 * earthMult) * multiplier
+            }
+            "galaxy" -> {
+                val galaxyMult = getBuildingMultiplier(state, "galaxy")
+                (state.lollipopGalaxyLevel * 50000.0 * galaxyMult) * multiplier
+            }
+            else -> 0.0
+        }
+    }
+
+    fun getCps(state: GameState): Double {
+        return getTowerCps(state, "mitt") +
+               getTowerCps(state, "click") +
+               getTowerCps(state, "drone") +
+               getTowerCps(state, "gingerbread") +
+               getTowerCps(state, "cotton") +
+               getTowerCps(state, "volcano") +
+               getTowerCps(state, "earth") +
+               getTowerCps(state, "galaxy")
     }
 
     private fun getIntervalUpgradeDetails(buildingId: String, interval: Int, baseCostOfBuilding: Double, currentLevel: Int, state: GameState): UpgradeItem? {
@@ -458,15 +644,28 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         )
     }
 
+
+
     fun getUpgradeItems(state: GameState): List<UpgradeItem> {
-        val standardList = listOf(
+        val standardList = mutableListOf(
+            UpgradeItem(
+                id = "mitts",
+                name = "Oven Mitts",
+                description = "Thick heat-resistant mitts. Generates +0.1 candies/sec and rotates around the lollipop!",
+                baseCost = 10.0,
+                costMultiplier = 1.15,
+                cpsIncrease = 0.1,
+                clickPowerIncrease = 0.0,
+                level = state.mittLevel,
+                cost = calculateCost(10.0, state.mittLevel)
+            ),
             UpgradeItem(
                 id = "click",
                 name = "Sugar Tower",
-                description = "A compact spun-sugar tower. Generates +0.1 candies/sec.",
+                description = "A compact spun-sugar tower. Generates +1.0 candies/sec.",
                 baseCost = 15.0,
                 costMultiplier = 1.15,
-                cpsIncrease = 0.1,
+                cpsIncrease = 1.0,
                 clickPowerIncrease = 0.0,
                 level = state.clickPowerLevel,
                 cost = calculateCost(15.0, state.clickPowerLevel)
@@ -474,10 +673,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             UpgradeItem(
                 id = "drone",
                 name = "Candy Drone",
-                description = "Automated mechanical bees. Generates +0.5 candies/sec.",
+                description = "Automated mechanical bees. Generates +12.0 candies/sec.",
                 baseCost = 100.0,
                 costMultiplier = 1.15,
-                cpsIncrease = 0.5,
+                cpsIncrease = 12.0,
                 clickPowerIncrease = 0.0,
                 level = state.candyDroneLevel,
                 cost = calculateCost(100.0, state.candyDroneLevel)
@@ -485,10 +684,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             UpgradeItem(
                 id = "gingerbread",
                 name = "Gingerbread Mill",
-                description = "Grinds delicious cookie-crust ingredients. Generates +4.0/sec.",
+                description = "Grinds delicious cookie-crust ingredients. Generates +56.0/sec.",
                 baseCost = 1100.0,
                 costMultiplier = 1.15,
-                cpsIncrease = 4.0,
+                cpsIncrease = 56.0,
                 clickPowerIncrease = 0.0,
                 level = state.gingerbreadLevel,
                 cost = calculateCost(1100.0, state.gingerbreadLevel)
@@ -496,10 +695,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             UpgradeItem(
                 id = "cotton",
                 name = "Cotton Cloud",
-                description = "Spun sugar vaporizers drifting in the sky. Generates +32.0/sec.",
+                description = "Spun sugar vaporizers drifting in the sky. Generates +300.0/sec.",
                 baseCost = 12000.0,
                 costMultiplier = 1.15,
-                cpsIncrease = 32.0,
+                cpsIncrease = 300.0,
                 clickPowerIncrease = 0.0,
                 level = state.cottonCloudLevel,
                 cost = calculateCost(12000.0, state.cottonCloudLevel)
@@ -507,10 +706,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             UpgradeItem(
                 id = "volcano",
                 name = "Chocolate Volcano",
-                description = "Erupts molten lava fudge. Generates +260.0 candies/sec.",
+                description = "Erupts molten lava fudge. Generates +1,600.0 candies/sec.",
                 baseCost = 130000.0,
                 costMultiplier = 1.15,
-                cpsIncrease = 260.0,
+                cpsIncrease = 1600.0,
                 clickPowerIncrease = 0.0,
                 level = state.chocolateVolcanoLevel,
                 cost = calculateCost(130000.0, state.chocolateVolcanoLevel)
@@ -518,10 +717,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             UpgradeItem(
                 id = "earth",
                 name = "Sugar Earth",
-                description = "A massive chocolate-crust globe with sweet icing soils. Generates +600.0/sec.",
+                description = "A massive chocolate-crust globe with sweet icing soils. Generates +8,200.0/sec.",
                 baseCost = 450000.0,
                 costMultiplier = 1.15,
-                cpsIncrease = 600.0,
+                cpsIncrease = 8200.0,
                 clickPowerIncrease = 0.0,
                 level = state.sugarEarthLevel,
                 cost = calculateCost(450000.0, state.sugarEarthLevel)
@@ -529,56 +728,400 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             UpgradeItem(
                 id = "galaxy",
                 name = "Lollipop Galaxy",
-                description = "A swirling cluster of sugar solar systems. Generates +1,400.0/sec.",
+                description = "A swirling cluster of sugar solar systems. Generates +50,000.0/sec.",
                 baseCost = 1400000.0,
                 costMultiplier = 1.15,
-                cpsIncrease = 1400.0,
+                cpsIncrease = 50000.0,
                 clickPowerIncrease = 0.0,
                 level = state.lollipopGalaxyLevel,
                 cost = calculateCost(1400000.0, state.lollipopGalaxyLevel)
-            ),
-            UpgradeItem(
-                id = "spatula",
-                name = "Golden Spatula",
-                description = "Crafted from solidified sugar glass. Adds +2.5 to direct tap power.",
-                baseCost = 150.0,
-                costMultiplier = 1.25,
-                cpsIncrease = 0.0,
-                clickPowerIncrease = 2.5,
-                level = state.goldenSpatulaLevel,
-                cost = calculateCost(150.0, state.goldenSpatulaLevel, 1.25),
-                isBuilding = false
-            ),
-            UpgradeItem(
-                id = "synergies",
-                name = "Sweet Synergies",
-                description = "Boosts the efficiency of all automated producers by +15% per upgrade level.",
-                baseCost = 8000.0,
-                costMultiplier = 1.35,
-                cpsIncrease = 0.0,
-                clickPowerIncrease = 0.0,
-                level = state.sweetSynergiesLevel,
-                cost = calculateCost(8000.0, state.sweetSynergiesLevel, 1.35),
-                isBuilding = false
-            ),
-            UpgradeItem(
-                id = "munch",
-                name = "Critical Munch",
-                description = "Unlocks elite tapping power. Adds +12.0 to direct tap power.",
-                baseCost = 120000.0,
-                costMultiplier = 1.45,
-                cpsIncrease = 0.0,
-                clickPowerIncrease = 12.0,
-                level = state.criticalMunchLevel,
-                cost = calculateCost(120000.0, state.criticalMunchLevel, 1.45),
-                isBuilding = false
             )
         )
+
+
+
+
+
+
+        val purchasedSet = state.purchasedUpgrades.split(",").filter { it.isNotEmpty() }.toSet()
+
+        if (state.mittLevel >= 1 && !purchasedSet.contains("mitt_up_1")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_1",
+                    name = "First Mitt",
+                    description = "Twice as efficient for clicking power and mitts auto clicking power.",
+                    baseCost = 100.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 100.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 1 && !purchasedSet.contains("mitt_up_2")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_2",
+                    name = "First Mitt Twin",
+                    description = "Twice as efficient for clicking power and mitts auto clicking power.",
+                    baseCost = 500.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 500.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 10 && !purchasedSet.contains("mitt_up_3")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_3",
+                    name = "Tenamitts",
+                    description = "Twice as efficient for clicking power and mitts auto clicking power.",
+                    baseCost = 10000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 10000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 25 && !purchasedSet.contains("mitt_up_4")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_4",
+                    name = "Quarter Mitts",
+                    description = "Tapping and mitts gain +0.1 candies/sec for each non-mitt tower owned.",
+                    baseCost = 100000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 100000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 50 && !purchasedSet.contains("mitt_up_5")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_5",
+                    name = "Half Mitts",
+                    description = "Multiplies the gain from Quarter Mitts by 5.",
+                    baseCost = 1000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 1000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 100 && !purchasedSet.contains("mitt_up_6")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_6",
+                    name = "Century Mitts",
+                    description = "Multiplies the gain from Half Mitts by 10.",
+                    baseCost = 10000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 10000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 150 && !purchasedSet.contains("mitt_up_7")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_7",
+                    name = "Fire Proof Mitts",
+                    description = "Multiplies the gain from Century Mitts by 15.",
+                    baseCost = 100000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 100000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 200 && !purchasedSet.contains("mitt_up_8")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_8",
+                    name = "Titanium Mitts",
+                    description = "Multiplies the gain from Fire Proof Mitts by 20.",
+                    baseCost = 1000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 1000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 250 && !purchasedSet.contains("mitt_up_9")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_9",
+                    name = "Space Mitts",
+                    description = "Multiplies the gain from Titanium Mitts by 20.",
+                    baseCost = 50000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 50000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 300 && !purchasedSet.contains("mitt_up_10")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_10",
+                    name = "Black Hole Mitts",
+                    description = "Multiplies the gain from Space Mitts by 25.",
+                    baseCost = 1000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 1000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 350 && !purchasedSet.contains("mitt_up_11")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_11",
+                    name = "Quasar Mitts",
+                    description = "Multiplies the gain from Black Hole Mitts by 25.",
+                    baseCost = 50000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 50000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 400 && !purchasedSet.contains("mitt_up_12")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_12",
+                    name = "Core Mitts",
+                    description = "Multiplies the gain from Quasar Mitts by 25.",
+                    baseCost = 1000000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 1000000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 450 && !purchasedSet.contains("mitt_up_13")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_13",
+                    name = "Nebula Mitts",
+                    description = "Multiplies the gain from Core Mitts by 25.",
+                    baseCost = 50000000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 50000000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.mittLevel >= 500 && !purchasedSet.contains("mitt_up_14")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "mitt_up_14",
+                    name = "Finale Mitts",
+                    description = "Multiplies the gain from Nebula Mitts by 100.",
+                    baseCost = 1000000000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 1000000000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 1000.0 && !purchasedSet.contains("spatula_wooden")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_wooden",
+                    name = "Wooden Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 50000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 50000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 100000.0 && !purchasedSet.contains("spatula_plastic")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_plastic",
+                    name = "Plastic Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 5000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 5000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 10000000.0 && !purchasedSet.contains("spatula_silicon")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_silicon",
+                    name = "Silicon Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 500000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 500000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 1000000000.0 && !purchasedSet.contains("spatula_steel")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_steel",
+                    name = "Steel Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 5000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 5000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 100000000000.0 && !purchasedSet.contains("spatula_aluminum")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_aluminum",
+                    name = "Aluminum Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 500000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 500000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 1000000000000.0 && !purchasedSet.contains("spatula_titanium")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_titanium",
+                    name = "Titanium Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 10000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 10000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 100000000000000.0 && !purchasedSet.contains("spatula_iridium")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_iridium",
+                    name = "Iridium Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 1000000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 1000000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
+
+        if (state.totalClickCandiesEarned >= 10000000000000000.0 && !purchasedSet.contains("spatula_gold")) {
+            standardList.add(
+                UpgradeItem(
+                    id = "spatula_gold",
+                    name = "Gold Spatula",
+                    description = "Tapping gains +1% of your candies per second when upgrade is bought.",
+                    baseCost = 100000000000000000.0,
+                    costMultiplier = 1.0,
+                    cpsIncrease = 0.0,
+                    clickPowerIncrease = 0.0,
+                    level = 0,
+                    cost = 100000000000000000.0,
+                    isBuilding = false
+                )
+            )
+        }
 
         val intervalList = mutableListOf<UpgradeItem>()
         val intervals = listOf(25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500)
         val stats = listOf(
-            Triple("click", 15.0, state.clickPowerLevel),
             Triple("drone", 100.0, state.candyDroneLevel),
             Triple("gingerbread", 1100.0, state.gingerbreadLevel),
             Triple("cotton", 12000.0, state.cottonCloudLevel),
@@ -595,7 +1138,48 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             }
         }
 
-        return standardList + intervalList
+        val customClickUpgrades = mutableListOf<UpgradeItem>()
+        val clickLevel = state.clickPowerLevel
+        val clickUpDefs = listOf(
+            Triple("click_up_1_concrete", "Sweet Concrete", Pair(1, 1000.0)),
+            Triple("click_up_1_bolts", "Sweet Bolts", Pair(1, 5000.0)),
+            Triple("click_up_10_steel", "Sweet Steel", Pair(10, 20000.0)),
+            Triple("click_up_25_cables", "Sweet Cables", Pair(25, 150000.0)),
+            Triple("click_up_50_paint", "Sweet Paint", Pair(50, 500000.0)),
+            Triple("click_up_100_elevator", "Sweet Elevator", Pair(100, 1000000.0)),
+            Triple("click_up_150_glass", "Sweet Glass", Pair(150, 10000000.0)),
+            Triple("click_up_200_rivets", "Sweet Rivets", Pair(200, 100000000.0)),
+            Triple("click_up_250_roof", "Sweet Roof", Pair(250, 500000000.0)),
+            Triple("click_up_300_walls", "Sweet Walls", Pair(300, 2000000000.0)),
+            Triple("click_up_350_tiles", "Sweet Tiles", Pair(350, 50000000000.0)),
+            Triple("click_up_400_carpet", "Sweet Carpet", Pair(400, 250000000000.0)),
+            Triple("click_up_450_elevator", "Sweet Elevator", Pair(450, 750000000000.0)),
+            Triple("click_up_500_stairs", "Sweet Stairs", Pair(500, 50000000000000.0))
+        )
+        for (def in clickUpDefs) {
+            val upId = def.first
+            val upName = def.second
+            val upTargetLvl = def.third.first
+            val upCost = def.third.second
+            if (!purchasedSet.contains(upId) && clickLevel >= upTargetLvl) {
+                customClickUpgrades.add(
+                    UpgradeItem(
+                        id = upId,
+                        name = upName,
+                        description = "Sugar Tower upgrade twice as efficient (+100% CPS)!",
+                        baseCost = upCost,
+                        costMultiplier = 1.0,
+                        cpsIncrease = 0.0,
+                        clickPowerIncrease = 0.0,
+                        level = 1,
+                        cost = upCost,
+                        isBuilding = false
+                    )
+                )
+            }
+        }
+
+        return standardList + intervalList + customClickUpgrades
     }
 
     private fun calculateCost(base: Double, level: Int, multiplier: Double = 1.15): Double {
@@ -610,13 +1194,30 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         return total
     }
 
+    fun getMaxAffordableCount(base: Double, currentLevel: Int, candies: Double, multiplier: Double = 1.15): Int {
+        var count = 0
+        var totalCost = 0.0
+        while (true) {
+            val nextCost = base * multiplier.pow((currentLevel + count).toDouble())
+            if (totalCost + nextCost <= candies) {
+                totalCost += nextCost
+                count++
+            } else {
+                break
+            }
+        }
+        return count
+    }
+
     fun formatValue(value: Double): String {
         return when {
-            value >= 1_000_000_000_000.0 -> String.format("%.2f T", value / 1_000_000_000_000.0)
-            value >= 1_000_000_000.0 -> String.format("%.2f B", value / 1_000_000_000.0)
-            value >= 1_000_000.0 -> String.format("%.2f M", value / 1_000_000.0)
-            value >= 1_000.0 -> String.format("%.1f K", value / 1_000.0)
-            else -> String.format("%.1f", value)
+            value >= 1_000_000_000_000_000_000.0 -> String.format(java.util.Locale.US, "%.2f Qi", value / 1_000_000_000_000_000_000.0)
+            value >= 1_000_000_000_000_000.0 -> String.format(java.util.Locale.US, "%.2f Qa", value / 1_000_000_000_000_000.0)
+            value >= 1_000_000_000_000.0 -> String.format(java.util.Locale.US, "%.2f T", value / 1_000_000_000_000.0)
+            value >= 1_000_000_000.0 -> String.format(java.util.Locale.US, "%.2f B", value / 1_000_000_000.0)
+            value >= 1_000_000.0 -> String.format(java.util.Locale.US, "%.2f M", value / 1_000_000.0)
+            value >= 1_000.0 -> String.format(java.util.Locale.US, "%.1f K", value / 1_000.0)
+            else -> String.format(java.util.Locale.US, "%.1f", value)
         }
     }
 

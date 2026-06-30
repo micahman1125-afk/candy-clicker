@@ -2,35 +2,40 @@ package com.example.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.R
 
-// Set of Material typography styles to start with
-val Typography =
-  Typography(
-    bodyLarge =
-      TextStyle(
-        fontFamily = FontFamily.Default,
+val TimesNewRoman = FontFamily(
+    Font(resId = R.font.times_new_roman_regular, weight = FontWeight.Normal),
+    Font(resId = R.font.times_new_roman_bold, weight = FontWeight.Bold)
+)
+
+// Set of Material typography styles to use Times New Roman
+val Typography = Typography(
+    displayLarge = TextStyle(fontFamily = TimesNewRoman),
+    displayMedium = TextStyle(fontFamily = TimesNewRoman),
+    displaySmall = TextStyle(fontFamily = TimesNewRoman),
+    headlineLarge = TextStyle(fontFamily = TimesNewRoman),
+    headlineMedium = TextStyle(fontFamily = TimesNewRoman),
+    headlineSmall = TextStyle(fontFamily = TimesNewRoman),
+    titleLarge = TextStyle(fontFamily = TimesNewRoman),
+    titleMedium = TextStyle(fontFamily = TimesNewRoman),
+    titleSmall = TextStyle(fontFamily = TimesNewRoman),
+    bodyLarge = TextStyle(
+        fontFamily = TimesNewRoman,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp,
-      )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
     ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
-  )
+    bodyMedium = TextStyle(fontFamily = TimesNewRoman),
+    bodySmall = TextStyle(fontFamily = TimesNewRoman),
+    labelLarge = TextStyle(fontFamily = TimesNewRoman),
+    labelMedium = TextStyle(fontFamily = TimesNewRoman),
+    labelSmall = TextStyle(fontFamily = TimesNewRoman)
+)
+
+

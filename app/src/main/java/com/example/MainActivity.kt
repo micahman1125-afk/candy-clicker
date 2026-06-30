@@ -1,6 +1,11 @@
 package com.example
 
 import android.os.Bundle
+import android.content.Context
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.os.VibrationEffect
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -15,6 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,6 +41,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import android.view.HapticFeedbackConstants
+import android.media.AudioAttributes
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,9 +69,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
 
 class MainActivity : ComponentActivity() {
-  override fun getAttributionTag(): String? {
-    return "audio"
-  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -87,6 +96,8 @@ fun CandyClickerApp(viewModel: GameViewModel) {
     val offlineEarnings by viewModel.offlineEarnings.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+    val view = LocalView.current
+    val hapticFeedback = LocalHapticFeedback.current
     val lollipopBitmap = remember(context) {
         loadTransparentLollipop(context)
     }
@@ -259,8 +270,7 @@ fun CandyClickerApp(viewModel: GameViewModel) {
         // --- GRID MAIN AREA ---
         Column(
             modifier = Modifier
-                .weight(1.0f)
-                .padding(horizontal = if (activeTab == "game") 16.dp else 0.dp),
+                .weight(1.0f),
             verticalArrangement = Arrangement.spacedBy(if (activeTab == "game") 12.dp else 0.dp)
         ) {
             // Card 1: Centered Total Candies and CPS Count (Background Removed)
@@ -268,6 +278,7 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
                         .padding(vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -298,14 +309,18 @@ fun CandyClickerApp(viewModel: GameViewModel) {
 
             if (activeTab == "game") {
                 // Interactive Tap Target (Occupying full area of the game tab)
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1.0f)
-                        .clip(RoundedCornerShape(28.dp))
                         .background(Color.Transparent),
                     contentAlignment = Alignment.Center
                 ) {
+                    val containerWidth = maxWidth
+                    val containerHeight = maxHeight
+                    val workingSize = minOf(containerWidth, containerHeight)
+                    val lollipopSize = workingSize * 1.225f // Scaled lollipop (scaled up by 75%)
+
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
@@ -313,13 +328,13 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(642.dp)
+                            modifier = Modifier.size(workingSize).offset(x = 20.dp)
                         ) {
                             Image(
                                 bitmap = lollipopBitmap,
                                 contentDescription = "Giant Candy click target",
                                 modifier = Modifier
-                                    .size(472.dp)
+                                    .size(lollipopSize)
                                     .scale(scale)
                                     .rotate(-45f)
                                     .testTag("candy_click_target")
@@ -337,17 +352,95 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                         if (state.soundOn) {
                                             CrunchSoundPlayer.play()
                                         }
+                                        if (state.vibrationOn) {
+                                            try {
+                                                // hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            } catch (e: Exception) {}
+                                            try {
+                                                // view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                                // view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                            } catch (e: Exception) {}
+                                            try {
+                                                val attributionContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                                     context.applicationContext.createAttributionContext("vibrate")
+                                                 } else {
+                                                     context.applicationContext
+                                                 }
+                                                 val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                    val vibratorManager = attributionContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                                                    vibratorManager?.defaultVibrator
+                                                } else {
+                                                    @Suppress("DEPRECATION")
+                                                    attributionContext.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                                                }
+                                                if (vibrator != null && vibrator.hasVibrator()) {
+                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                        val attrs = AudioAttributes.Builder()
+                                                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                                                            .build()
+                                                        vibrator.vibrate(VibrationEffect.createOneShot(40, 255), attrs)
+                                                    } else {
+                                                        @Suppress("DEPRECATION")
+                                                        vibrator.vibrate(40)
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                // ignore fallback
+                                            }
+                                        }
                                         
-                                        // Random polar coordinates to distribute the indicators in a ring around the lollipop
+                                        // Random polar coordinates to distribute the indicators in a ring around the scaled lollipop candy center
                                         val angle = (0..359).random() * (Math.PI / 180.0)
-                                        val radius = (195..285).random()
-                                        val randomX = (kotlin.math.cos(angle) * radius).toFloat()
-                                        val randomY = (kotlin.math.sin(angle) * radius).toFloat()
+                                        val minRadius = workingSize.value * 0.31f * 1.75f
+                                        val maxRadius = workingSize.value * 0.44f * 1.75f
+                                        val radius = (minRadius.toInt()..maxRadius.toInt()).random().toFloat()
+                                        val randomX = (kotlin.math.cos(angle) * radius).toFloat() - 35f
+                                        val randomY = (kotlin.math.sin(angle) * radius).toFloat() - 61.25f
                                         
                                         viewModel.onCandyClicked(randomX, randomY)
                                     },
                                 contentScale = ContentScale.Fit
                             )
+
+                            // Render rotating oven mitt outer ring
+                            val numVisibleMitts = minOf(state.mittLevel, 16)
+                            if (numVisibleMitts > 0) {
+                                val infiniteTransition = rememberInfiniteTransition(label = "mitt_rotation")
+                                val angleOffset by infiniteTransition.animateFloat(
+                                    initialValue = 0f,
+                                    targetValue = 2f * Math.PI.toFloat(),
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(durationMillis = 40000, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Restart
+                                    ),
+                                    label = "angleOffset"
+                                )
+
+                                for (i in 0 until numVisibleMitts) {
+                                    val baseAngle = (i.toFloat() / numVisibleMitts.toFloat()) * 2f * Math.PI.toFloat()
+                                    val totalAngle = baseAngle + angleOffset
+
+                                    // Place mitts perfectly centered and rotating around the scaled up lollipop candy center
+                                    val radiusDp = (((workingSize * 0.41f) - 38.dp) * 1.75f) - 40.dp
+                                    val xOffset = (kotlin.math.cos(totalAngle.toDouble()) * radiusDp.value).toFloat().dp - 30.dp
+                                    val yOffset = (kotlin.math.sin(totalAngle.toDouble()) * radiusDp.value).toFloat().dp - 36.25.dp
+
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .offset(x = xOffset, y = yOffset)
+                                            .size(48.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "🧤",
+                                            fontSize = 32.sp,
+                                            modifier = Modifier.rotate((totalAngle * 180f / Math.PI.toFloat()) + 90f)
+                                        )
+                                    }
+                                }
+                            }
 
                             // Render floating indicators overlays right around the lollipop
                             floatingEffects.forEach { effect ->
@@ -455,8 +548,13 @@ fun CandyClickerApp(viewModel: GameViewModel) {
 
                             // Column 2: Prestige Progress
                             val prestigeGoal = 1_000_000_000_000.0
-                            val canPrestige = state.candies >= prestigeGoal
-                            val progressRatio = (state.candies / prestigeGoal).coerceIn(0.0, 1.0).toFloat()
+                            val totalPrestigeCalculated = (state.totalCandiesEarned / prestigeGoal).toLong()
+                            val pointsToClaim = (totalPrestigeCalculated - state.prestigePoints).coerceAtLeast(0L)
+                            val canPrestige = pointsToClaim > 0
+                            
+                            val currentMilestone = state.prestigePoints * prestigeGoal
+                            val candiesTowardNext = (state.totalCandiesEarned - currentMilestone).coerceAtLeast(0.0)
+                            val progressRatio = (candiesTowardNext / prestigeGoal).coerceIn(0.0, 1.0).toFloat()
 
                             Box(
                                 modifier = Modifier
@@ -493,7 +591,6 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
                                     if (canPrestige) {
-                                        val pointsToClaim = (state.candies / prestigeGoal).toLong()
                                         Text(
                                             text = "TAP HERE TO CLAIM +$pointsToClaim ${if (pointsToClaim == 1L) "PT" else "PTS"}!",
                                             style = MaterialTheme.typography.bodyMedium,
@@ -523,7 +620,7 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "${viewModel.formatValue(state.candies)} / 1.00 T",
+                                                text = "${viewModel.formatValue(candiesTowardNext)} / 1.00 T",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFFF9BCBC)
@@ -584,7 +681,7 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                         )
                                     }
                                     Icon(
-                                        imageVector = Icons.Default.ArrowForward,
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                         contentDescription = "Open Achievements",
                                         tint = Color(0xFFFFD54F)
                                     )
@@ -618,7 +715,7 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                 ) {
                                     IconButton(onClick = { showAchievements = false }) {
                                         Icon(
-                                            imageVector = Icons.Default.ArrowBack,
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                             contentDescription = "Back",
                                             tint = Color.White
                                         )
@@ -856,16 +953,16 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(Color(0xFFFF547D))
                                             .clickable {
-                                                val quantities = listOf(1, 10, 25, 50, 100)
+                                                val quantities = listOf(1, 10, 25, 50, 100, -1)
                                                 val currentIndex = quantities.indexOf(buyQuantity)
-                                                val nextIndex = (currentIndex + 1) % quantities.size
+                                                val nextIndex = if (currentIndex == -1) 0 else (currentIndex + 1) % quantities.size
                                                 buyQuantity = quantities[nextIndex]
                                             }
                                             .padding(horizontal = 10.dp, vertical = 6.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "x$buyQuantity",
+                                            text = if (buyQuantity == -1) "MAX" else "x$buyQuantity",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White
@@ -874,20 +971,26 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                 }
                             } else {
                                 val categoryFilteredItems = viewModel.getUpgradeItems(state).filter {
-                                    if (shopSubcategory == "upgrades") !it.isBuilding else it.isBuilding
+                                    val isSubMatching = if (shopSubcategory == "upgrades") !it.isBuilding else it.isBuilding
+                                    isSubMatching
                                 }
-                                val availableCount = categoryFilteredItems.count { state.candies >= it.cost }
+                                val availableCount = categoryFilteredItems.count { item ->
+                                    state.candies >= item.cost
+                                }
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(8.dp))
                                         .background(Color(0xFFFF547D))
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        .clickable(enabled = availableCount > 0) {
+                                            viewModel.buyMaxAffordableUpgrades()
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = "$availableCount BUYABLE",
+                                        text = "BUY MAX ($availableCount BUYABLE)",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Black,
-                                        color = Color.White
+                                        color = if (availableCount > 0) Color.White else Color.White.copy(alpha = 0.6f)
                                     )
                                 }
                             }
@@ -939,17 +1042,19 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                     color = if (isSubUpgrades) Color.White else Color(0xFFF9BCBC)
                                 )
                             }
+
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Embedded upgrades list in the Bento box
                         val upgrades = viewModel.getUpgradeItems(state).filter {
-                            if (shopSubcategory == "upgrades") !it.isBuilding else it.isBuilding
+                            val isSubMatching = if (shopSubcategory == "upgrades") !it.isBuilding else it.isBuilding
+                            isSubMatching
                         }.map { item ->
                             if (item.isBuilding) {
                                 if (isSellMode) {
-                                    val actualCount = minOf(buyQuantity, item.level)
+                                    val actualCount = if (buyQuantity == -1) item.level else minOf(buyQuantity, item.level)
                                     val refund = if (actualCount > 0) {
                                         viewModel.calculateMultiCost(item.baseCost, item.level - actualCount, actualCount, item.costMultiplier) * 0.5
                                     } else {
@@ -957,7 +1062,12 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                     }
                                     item.copy(cost = refund)
                                 } else {
-                                    if (buyQuantity > 1) {
+                                    if (buyQuantity == -1) {
+                                        val maxAffordable = viewModel.getMaxAffordableCount(item.baseCost, item.level, state.candies, item.costMultiplier)
+                                        val countToBuy = maxOf(1, maxAffordable)
+                                        val multiCost = viewModel.calculateMultiCost(item.baseCost, item.level, countToBuy, item.costMultiplier)
+                                        item.copy(cost = multiCost)
+                                    } else if (buyQuantity > 1) {
                                         val multiCost = viewModel.calculateMultiCost(item.baseCost, item.level, buyQuantity, item.costMultiplier)
                                         item.copy(cost = multiCost)
                                     } else {
@@ -980,11 +1090,25 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                 BentoStoreCard(
                                     item = item,
                                     currentCandies = state.candies,
-                                    onBuy = { viewModel.buyUpgrade(item.id, if (item.isBuilding) buyQuantity else 1) },
+                                    onBuy = {
+                                        val count = if (buyQuantity == -1) {
+                                            viewModel.getMaxAffordableCount(item.baseCost, item.level, state.candies, item.costMultiplier)
+                                        } else {
+                                            buyQuantity
+                                        }
+                                        if (count > 0) {
+                                            viewModel.buyUpgrade(item.id, if (item.isBuilding) count else 1)
+                                        }
+                                    },
                                     viewModel = viewModel,
                                     buyQuantity = if (item.isBuilding) buyQuantity else 1,
                                     isSellMode = isSellMode && item.isBuilding,
-                                    onSell = { viewModel.sellUpgrade(item.id, if (item.isBuilding) buyQuantity else 1) }
+                                    onSell = {
+                                        val count = if (buyQuantity == -1) item.level else buyQuantity
+                                        if (count > 0) {
+                                            viewModel.sellUpgrade(item.id, if (item.isBuilding) count else 1)
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -1139,6 +1263,30 @@ fun CandyClickerApp(viewModel: GameViewModel) {
                                 )
                             }
 
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Premium Cover Banner Display
+                            Text(
+                                text = "Official Game Cover Art",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFF9BCBC)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(130.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .border(2.dp, Color(0xFFFF547D), RoundedCornerShape(16.dp))
+                            ) {
+                                androidx.compose.foundation.Image(
+                                    painter = painterResource(id = R.drawable.candy_clicker_cover),
+                                    contentDescription = "Candy Clicker Game Cover",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+
                             Spacer(modifier = Modifier.weight(1f))
 
                             // Reset progress Button
@@ -1262,9 +1410,29 @@ fun BentoStoreCard(
     isSellMode: Boolean = false,
     onSell: () -> Unit = {}
 ) {
-    val actualSellCount = if (isSellMode && item.isBuilding) minOf(buyQuantity, item.level) else 0
-    val canAct = if (isSellMode) actualSellCount > 0 else currentCandies >= item.cost
+    val maxAffordable = if (item.isBuilding) {
+        viewModel.getMaxAffordableCount(item.baseCost, item.level, currentCandies, item.costMultiplier)
+    } else {
+        0
+    }
+    val actualSellCount = if (isSellMode && item.isBuilding) {
+        if (buyQuantity == -1) item.level else minOf(buyQuantity, item.level)
+    } else {
+        0
+    }
+    val canAct = if (isSellMode) {
+        actualSellCount > 0
+    } else {
+        if (item.isBuilding && buyQuantity == -1) {
+            maxAffordable > 0
+        } else {
+            currentCandies >= item.cost
+        }
+    }
+
     val icon = when {
+        item.id == "mitts" -> "🧤"
+        item.id.startsWith("mitt_up_") -> "🧤✨"
         item.id == "click" -> "🗼"
         item.id.startsWith("click_") -> "🗼✨"
         item.id == "drone" -> "🤖"
@@ -1279,13 +1447,20 @@ fun BentoStoreCard(
         item.id.startsWith("earth_") -> "🌍✨"
         item.id == "galaxy" -> "🌌"
         item.id.startsWith("galaxy_") -> "🌌✨"
-        item.id == "spatula" -> "🥄"
-        item.id == "synergies" -> "🤝"
-        item.id == "munch" -> "⚡"
+        item.id == "spatula_wooden" -> "🪵🍳"
+        item.id == "spatula_plastic" -> "🥤🍳"
+        item.id == "spatula_silicon" -> "🔵🍳"
+        item.id == "spatula_steel" -> "🔩🍳"
+        item.id == "spatula_aluminum" -> "🪙🍳"
+        item.id == "spatula_titanium" -> "🛡️🍳"
+        item.id == "spatula_iridium" -> "☄️🍳"
+        item.id == "spatula_gold" -> "🏆🍳"
+        item.id.startsWith("spatula_") -> "🍳"
         else -> "🌌"
     }
 
     val actionColor = if (isSellMode) Color(0xFFE53935) else Color(0xFFFF547D)
+    var showInfo by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -1296,94 +1471,228 @@ fun BentoStoreCard(
             .clickable(enabled = canAct, onClick = if (isSellMode) onSell else onBuy)
             .padding(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left icon Emoji badge
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x15FFFFFF)),
-                contentAlignment = Alignment.Center
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = icon, fontSize = 20.sp)
+                // Left icon Emoji badge
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x15FFFFFF)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = icon, fontSize = 20.sp)
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                // Info middle
+                Column(modifier = Modifier.weight(1.0f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = item.name,
+                            style = if (item.isBuilding) {
+                                MaterialTheme.typography.bodyMedium.copy(fontSize = 21.sp)
+                            } else {
+                                MaterialTheme.typography.bodyMedium
+                            },
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    if (!item.isBuilding) {
+                        Text(
+                            text = item.description,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xCCFFFFFF),
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (isSellMode) {
+                                "Refund: +${viewModel.formatValue(item.cost)}"
+                            } else {
+                                "Cost: ${viewModel.formatValue(item.cost)}"
+                            },
+                            style = if (item.isBuilding) {
+                                MaterialTheme.typography.labelSmall.copy(fontSize = 8.25.sp)
+                            } else {
+                                MaterialTheme.typography.labelSmall
+                            },
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSellMode) {
+                                if (canAct) Color(0xFF81C784) else Color(0x80FFFFFF)
+                            } else {
+                                if (canAct) Color(0xFFFFDADB) else Color(0x80FFFFFF)
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Info tab/button next to buy button
+                if (item.isBuilding) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (showInfo) Color(0x50FFFFFF)
+                                else Color(0x15FFFFFF)
+                            )
+                            .clickable { showInfo = !showInfo }
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "INFO ℹ️",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+
+                // Right Buy/Sell button/indication
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (canAct) actionColor
+                            else Color(0x15FFFFFF)
+                        )
+                        .clickable(enabled = canAct, onClick = if (isSellMode) onSell else onBuy)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = if (isSellMode) {
+                            if (buyQuantity == -1) {
+                                if (actualSellCount > 0) "SELL ALL (x$actualSellCount)" else "SELL"
+                            } else {
+                                if (actualSellCount > 1) "SELL x$actualSellCount" else "SELL"
+                            }
+                        } else {
+                            if (item.isBuilding) {
+                                if (buyQuantity == -1) {
+                                    if (maxAffordable > 0) "BUY x$maxAffordable" else "BUY"
+                                } else if (buyQuantity > 1) {
+                                    "BUY x$buyQuantity"
+                                } else {
+                                    "BUY"
+                                }
+                            } else {
+                                "BUY"
+                            }
+                        },
+                        fontWeight = FontWeight.Black,
+                        color = if (canAct) Color.White else Color(0x40FFFFFF),
+                        fontSize = 11.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            if (showInfo && item.isBuilding) {
+                val state by viewModel.gameState.collectAsStateWithLifecycle()
+                val towerId = when (item.id) {
+                    "mitts" -> "mitt"
+                    "click" -> "click"
+                    "drone" -> "drone"
+                    "gingerbread" -> "gingerbread"
+                    "cotton" -> "cotton"
+                    "volcano" -> "volcano"
+                    "earth" -> "earth"
+                    "galaxy" -> "galaxy"
+                    else -> ""
+                }
+                if (towerId.isNotEmpty()) {
+                    val activeCps = viewModel.getTowerCps(state, towerId)
+                    val totalProduced = when (towerId) {
+                        "mitt" -> state.mittsTotalEarned
+                        "click" -> state.clickTotalEarned
+                        "drone" -> state.droneTotalEarned
+                        "gingerbread" -> state.gingerbreadTotalEarned
+                        "cotton" -> state.cottonTotalEarned
+                        "volcano" -> state.volcanoTotalEarned
+                        "earth" -> state.earthTotalEarned
+                        "galaxy" -> state.galaxyTotalEarned
+                        else -> 0.0
+                    }
 
-            // Info middle
-            Column(modifier = Modifier.weight(1.0f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    if (item.level > 0) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFFFDADB))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x20000000))
+                            .padding(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Lv.${item.level}",
-                                color = Color(0xFF2B1516),
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold
+                                text = item.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xEEFFFFFF),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
                             )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0x15FFFFFF))
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = "ACTIVE CPS",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF9EAF)
+                                )
+                                Text(
+                                    text = "producing ${viewModel.formatValue(activeCps)} per second",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "TOTAL CANDY PRODUCED",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF9EAF)
+                                )
+                                Text(
+                                    text = viewModel.formatValue(totalProduced),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
-                Text(
-                    text = item.description,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xCCFFFFFF),
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (isSellMode) {
-                            "Refund: +${viewModel.formatValue(item.cost)}"
-                        } else {
-                            "Cost: ${viewModel.formatValue(item.cost)}"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSellMode) {
-                            if (canAct) Color(0xFF81C784) else Color(0x80FFFFFF)
-                        } else {
-                            if (canAct) Color(0xFFFFDADB) else Color(0x80FFFFFF)
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Right Buy/Sell button/indication
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (canAct) actionColor else Color(0x15FFFFFF))
-                    .clickable(enabled = canAct, onClick = if (isSellMode) onSell else onBuy)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = if (isSellMode) {
-                        if (actualSellCount > 1) "SELL x$actualSellCount" else "SELL"
-                    } else {
-                        if (item.isBuilding && buyQuantity > 1) "BUY x$buyQuantity" else "BUY"
-                    },
-                    fontWeight = FontWeight.Black,
-                    color = if (canAct) Color.White else Color(0x40FFFFFF),
-                    fontSize = 11.sp
-                )
             }
         }
     }
@@ -1449,7 +1758,7 @@ fun loadTransparentLollipop(context: android.content.Context): ImageBitmap {
         inMutable = true
     }
     val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.img_lollipop, options)
-        ?: return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()
+        ?: return androidx.core.graphics.createBitmap(1, 1).asImageBitmap()
     
     val width = bitmap.width
     val height = bitmap.height
@@ -1862,60 +2171,6 @@ fun getAchievementsList(state: GameState): List<CandyAchievementItem> {
             )
         )
     }
-
-    // 8. Tapping Masteries / Catalyst Tools
-    items.add(
-        CandyAchievementItem(
-            id = "tapping_spatula_5",
-            name = "Glass Spores",
-            category = "Catalyst Tools",
-            upgradeId = "spatula",
-            targetLevel = 5,
-            emoji = "🍳",
-            description = "Upgrade Golden Spatula 5 times for a clean scraper.",
-            tier = "bronze",
-            currentLevel = state.goldenSpatulaLevel
-        )
-    )
-    items.add(
-        CandyAchievementItem(
-            id = "tapping_spatula_15",
-            name = "Alchemist Scraper",
-            category = "Catalyst Tools",
-            upgradeId = "spatula",
-            targetLevel = 15,
-            emoji = "🍳",
-            description = "Purchase 15 Golden Spatulas for ultra pure tap refining.",
-            tier = "silver",
-            currentLevel = state.goldenSpatulaLevel
-        )
-    )
-    items.add(
-        CandyAchievementItem(
-            id = "tapping_synergies_5",
-            name = "Sugar Catalyst",
-            category = "Catalyst Tools",
-            upgradeId = "synergies",
-            targetLevel = 5,
-            emoji = "🧪",
-            description = "Unlock 5 levels of Sweet Synergies to link automated producers.",
-            tier = "gold",
-            currentLevel = state.sweetSynergiesLevel
-        )
-    )
-    items.add(
-        CandyAchievementItem(
-            id = "tapping_munch_5",
-            name = "Primal Muncher",
-            category = "Catalyst Tools",
-            upgradeId = "munch",
-            targetLevel = 5,
-            emoji = "🦖",
-            description = "Leap into dinosaur level confectionery with 5 Critical Munch upgrades.",
-            tier = "diamond",
-            currentLevel = state.criticalMunchLevel
-        )
-    )
 
     return items
 }
